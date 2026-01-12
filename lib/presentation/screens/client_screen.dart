@@ -72,13 +72,17 @@ class _ClientScreenState extends State<ClientScreen> {
     try {
       await service.sendFiles(service.selectedFiles);
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Файлы отправлены')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Файлы отправлены')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
+      }
     }
   }
 
@@ -434,6 +438,7 @@ class _ClientScreenState extends State<ClientScreen> {
                       'Общий размер: ${_calculateTotalSize(service.selectedFiles)}',
                       style: TextStyle(fontSize: 12),
                     ),
+                    SizedBox(height: 8),
                     Row(
                       children: [
                         ElevatedButton(

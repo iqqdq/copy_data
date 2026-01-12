@@ -353,7 +353,10 @@ class _ServerScreenState extends State<ServerScreen> {
   }
 
   Widget _buildFilesTab(FileTransferService service) {
-    // На сервере показываем полученные файлы
+    // На сервере показываем ВСЕ файлы, а не только completed
+    final allFiles = service.selectedFiles;
+
+    // Или показываем только успешно полученные файлы
     final receivedFiles = service.selectedFiles
         .where((file) => file.status == FileTransferStatus.completed)
         .toList();
@@ -375,6 +378,20 @@ class _ServerScreenState extends State<ServerScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[400]),
             ),
+            SizedBox(height: 20),
+            // Кнопка для отладки
+            ElevatedButton(
+              onPressed: () {
+                print('=== Отладка списка файлов ===');
+                print('Всего файлов: ${allFiles.length}');
+                for (var file in allFiles) {
+                  print(
+                    '  - ${file.name} (${file.status}, transferId: ${file.transferId})',
+                  );
+                }
+              },
+              child: Text('Отладка'),
+            ),
           ],
         ),
       );
@@ -383,38 +400,33 @@ class _ServerScreenState extends State<ServerScreen> {
     return Column(
       children: [
         // Панель информации
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          color: Theme.of(context).cardColor,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Получено файлов: ${receivedFiles.length}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    Text(
-                      'Общий размер: ${_calculateTotalSize(receivedFiles)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        Container(
+          padding: EdgeInsets.all(12),
+          color: Colors.green[50],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Получено файлов: ${receivedFiles.length}',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Всего файлов в списке: ${allFiles.length}',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: Icon(Icons.refresh),
+                onPressed: () {
+                  setState(() {});
+                },
+                tooltip: 'Обновить список',
+              ),
+            ],
           ),
         ),
 
@@ -425,58 +437,54 @@ class _ServerScreenState extends State<ServerScreen> {
             itemCount: receivedFiles.length,
             itemBuilder: (context, index) {
               final file = receivedFiles[index];
-
               return Card(
                 margin: EdgeInsets.symmetric(vertical: 4),
-                child: InkWell(
-                  onTap: () => _openFile(file),
-                  borderRadius: BorderRadius.circular(8),
-                  child: ListTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: _getFileColor(
-                          file.mimeType,
-                        ).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          _getFileIcon(file.mimeType),
-                          color: _getFileColor(file.mimeType),
-                          size: 20,
-                        ),
+                child: ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _getFileColor(file.mimeType).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        _getFileIcon(file.mimeType),
+                        color: _getFileColor(file.mimeType),
+                        size: 20,
                       ),
                     ),
-                    title: Text(
-                      file.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${_formatFileSize(file.size)} • ${_getFileType(file.mimeType)}',
-                          style: TextStyle(fontSize: 12),
+                  ),
+                  title: Text(
+                    file.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_formatFileSize(file.size)} • ${_getFileType(file.mimeType)}',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      Text(
+                        'Статус: ${_getStatusText(file.status)}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: _getStatusColor(file.status),
                         ),
-                        Text(
-                          'Получено: ${_formatDate(file.modifiedDate)}',
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.share, size: 18),
-                          onPressed: () => _shareFile(file),
-                          tooltip: 'Поделиться',
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.open_in_new, size: 18),
+                        onPressed: () => _openFile(file),
+                        tooltip: 'Открыть файл',
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -485,6 +493,39 @@ class _ServerScreenState extends State<ServerScreen> {
         ),
       ],
     );
+  }
+
+  // Добавьте вспомогательные методы:
+  String _getStatusText(FileTransferStatus status) {
+    switch (status) {
+      case FileTransferStatus.pending:
+        return 'Ожидание';
+      case FileTransferStatus.transferring:
+        return 'Передача';
+      case FileTransferStatus.completed:
+        return 'Получен';
+      case FileTransferStatus.failed:
+        return 'Ошибка';
+      case FileTransferStatus.paused:
+        return 'Пауза';
+      case FileTransferStatus.cancelled:
+        return 'Отменен';
+    }
+  }
+
+  Color _getStatusColor(FileTransferStatus status) {
+    switch (status) {
+      case FileTransferStatus.completed:
+        return Colors.green;
+      case FileTransferStatus.transferring:
+        return Colors.blue;
+      case FileTransferStatus.failed:
+        return Colors.red;
+      case FileTransferStatus.pending:
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
   }
 
   Widget _buildTransfersTab(FileTransferService service) {
@@ -572,7 +613,7 @@ class _ServerScreenState extends State<ServerScreen> {
                             style: TextStyle(fontSize: 12),
                           ),
                           Text(
-                            '${_formatFileSize(transfer.file.size)}',
+                            _formatFileSize(transfer.file.size),
                             style: TextStyle(fontSize: 12),
                           ),
                         ],
@@ -808,7 +849,7 @@ class _ServerScreenState extends State<ServerScreen> {
       // Запрашиваем разрешения (если нужно)
       final hasPermission = await FileOpener.requestStoragePermission();
 
-      if (!hasPermission) {
+      if (!hasPermission && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Необходимо разрешение на доступ к файлам')),
         );
@@ -817,7 +858,7 @@ class _ServerScreenState extends State<ServerScreen> {
 
       // Проверяем, существует ли файл
       final fileObj = File(file.path);
-      if (!await fileObj.exists()) {
+      if (!await fileObj.exists() && mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Файл не найден: ${file.name}')));
@@ -825,7 +866,7 @@ class _ServerScreenState extends State<ServerScreen> {
       }
 
       // Проверяем, поддерживается ли тип файла
-      if (!FileOpener.isFileTypeSupported(file.path)) {
+      if (!FileOpener.isFileTypeSupported(file.path) && mounted) {
         final confirm = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(

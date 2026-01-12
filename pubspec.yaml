@@ -1,4 +1,4 @@
-name: file_sharing
+name: local_file_transfer
 description: "A new Flutter project."
 
 publish_to: 'none'

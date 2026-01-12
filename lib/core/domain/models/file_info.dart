@@ -1,7 +1,7 @@
 class FileInfo {
   final String id;
   final String name;
-  final String path;
+  String path;
   final int size;
   final String hash;
   final String mimeType;

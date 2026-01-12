@@ -61,7 +61,7 @@ class FileTransferService extends ChangeNotifier {
           'type': 'file-transfer-server',
           'platform': Platform.operatingSystem,
         },
-        clientConnectionDelegate: _ServerConnectionHandler(this),
+        clientConnectionDelegate: _ServerConnectionHandler(),
       );
 
       // Запускаем сервер на всех интерфейсах
@@ -394,15 +394,39 @@ class FileTransferService extends ChangeNotifier {
   }
 
   void _handleFileReceived(Map<String, dynamic> data) {
-    // Клиент получает подтверждение о получении файла
+    // Клиент получает подтверждение от сервера о получении файла
+    final transferId = data['transferId'];
     final fileName = data['fileName'];
     final success = data['success'] ?? false;
+    final isTemporary = data['isTemporary'] ?? false;
+    final filePath = data['filePath'] as String?;
 
     if (success) {
-      print('✅ Сервер получил файл: $fileName');
+      print('✅ Сервер получил файл: $fileName (transferId: $transferId)');
+
+      // Обновляем статус файла на клиенте
+      final file = _selectedFiles.firstWhere((f) => f.transferId == transferId);
+
+      file.status = FileTransferStatus.completed;
+      file.progress = 100;
+
+      if (isTemporary) {
+        print('⚠️ Файл сохранен во временной директории: $filePath');
+        file.path = filePath ?? file.path;
+      }
+
+      notifyListeners();
+
       _status = 'Файл "$fileName" доставлен на сервер';
     } else {
       print('❌ Ошибка получения файла на сервере: $fileName');
+
+      // Обновляем статус файла на клиенте
+      final file = _selectedFiles.firstWhere((f) => f.transferId == transferId);
+
+      file.status = FileTransferStatus.failed;
+      notifyListeners();
+
       _status = 'Ошибка доставки файла "$fileName"';
     }
 
@@ -477,46 +501,46 @@ class FileTransferService extends ChangeNotifier {
     String transferId,
   ) async {
     try {
-      // Получаем правильную директорию для сохранения
+      print('💾 Начинаю сохранение файла: ${receiver.fileName}');
+
+      // 1. Получаем безопасную директорию (без разрешений)
       final directory = await _getSaveDirectory();
+      print('Директория для сохранения: ${directory.path}');
 
-      // Создаем безопасное имя файла
-      final safeFileName = _createSafeFileName(receiver.fileName);
-      final filePath = '${directory.path}/$safeFileName';
-
-      print('Сохраняем файл по пути: $filePath');
-
-      // Проверяем, существует ли директория, если нет - создаем
+      // 2. Проверяем, что директория существует и доступна для записи
       if (!await directory.exists()) {
-        print('Директория не существует, создаем: ${directory.path}');
+        print('Директория не существует, создаю...');
         await directory.create(recursive: true);
       }
 
-      // Собираем файл из чанков
-      final fileBytes = receiver.assembleFile();
+      // 3. Создаем безопасное имя файла
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final safeFileName = _createSafeFileName(receiver.fileName, timestamp);
+      final filePath = '${directory.path}/$safeFileName';
 
-      // Проверяем размер файла
-      if (fileBytes.length != receiver.fileSize) {
+      print('Полный путь к файлу: $filePath');
+
+      // 4. Собираем файл из чанков
+      print('Собираю файл из ${receiver.totalChunks} чанков...');
+      final fileBytes = receiver.assembleFile();
+      print('Собран файл размером: ${fileBytes.length} байт');
+
+      // 5. Сохраняем файл
+      final file = File(filePath);
+      print('Записываю файл на диск...');
+      await file.writeAsBytes(fileBytes);
+
+      // 6. Проверяем, что файл сохранен
+      final savedSize = await file.length();
+      print('Проверка: размер сохраненного файла = $savedSize байт');
+
+      if (savedSize != fileBytes.length) {
         print(
-          'Предупреждение: Размер файла не совпадает. Ожидалось: ${receiver.fileSize}, получено: ${fileBytes.length}',
+          '⚠️ Внимание: размер не совпадает! Ожидалось: ${fileBytes.length}, получено: $savedSize',
         );
       }
 
-      // Сохраняем файл
-      final file = File(filePath);
-      await file.writeAsBytes(fileBytes);
-
-      print('✅ Файл успешно сохранен: $filePath (${fileBytes.length} bytes)');
-
-      // Проверяем, что файл действительно создан
-      final savedFileSize = await file.length();
-      print('Проверка: размер сохраненного файла = $savedFileSize bytes');
-
-      if (savedFileSize == 0) {
-        throw Exception('Файл сохранен с нулевым размером');
-      }
-
-      // Создаем FileInfo для полученного файла
+      // 7. Создаем FileInfo
       final fileInfo = FileInfo(
         id: transferId,
         name: receiver.fileName,
@@ -531,7 +555,7 @@ class FileTransferService extends ChangeNotifier {
 
       _selectedFiles.add(fileInfo);
 
-      // Отправляем подтверждение получения файла
+      // 8. Отправляем подтверждение
       _sendMessage({
         'type': 'file_received',
         'transferId': transferId,
@@ -541,90 +565,209 @@ class FileTransferService extends ChangeNotifier {
         'success': true,
       });
 
+      print('✅ Файл успешно сохранен: $filePath');
       notifyListeners();
-    } catch (e) {
-      print('❌ Ошибка сохранения файла: $e');
-
-      // Отправляем ошибку
-      _sendMessage({
-        'type': 'transfer_error',
-        'transferId': transferId,
-        'error': 'Ошибка сохранения файла: ${e.toString()}',
-        'success': false,
-      });
+    } catch (e, stackTrace) {
+      print('❌ КРИТИЧЕСКАЯ ОШИБКА сохранения файла: $e');
+      print('Stack trace: $stackTrace');
     }
   }
 
-  // Новый метод для получения правильной директории сохранения
-  Future<Directory> _getSaveDirectory() async {
-    if (Platform.isAndroid) {
-      // На Android используем Downloads директорию
-      final downloadsDir = Directory('/storage/emulated/0/Download');
-      if (await downloadsDir.exists()) {
-        return downloadsDir;
+  String _createSafeFileName(String originalName, int timestamp) {
+    // Убираем все небезопасные символы
+    var safeName = originalName.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+    safeName = safeName.replaceAll(RegExp(r'\s+'), '_');
+
+    // Ограничиваем длину имени
+    const maxNameLength = 100;
+    if (safeName.length > maxNameLength) {
+      final extension = safeName.contains('.')
+          ? safeName.substring(safeName.lastIndexOf('.'))
+          : '';
+      final nameWithoutExt = safeName.contains('.')
+          ? safeName.substring(0, safeName.lastIndexOf('.'))
+          : safeName;
+
+      if (nameWithoutExt.length > maxNameLength - extension.length - 10) {
+        safeName =
+            '${nameWithoutExt.substring(0, maxNameLength - extension.length - 10)}_$timestamp$extension';
       }
-
-      // Альтернативный путь для некоторых Android устройств
-      final altDownloadsDir = Directory('/sdcard/Download');
-      if (await altDownloadsDir.exists()) {
-        return altDownloadsDir;
-      }
-
-      // Используем external storage directory
-      final externalDir = await getExternalStorageDirectory();
-      if (externalDir != null) {
-        return Directory('${externalDir.path}/Download');
-      }
-
-      // Последний вариант - application documents directory
-      final appDocDir = await getApplicationDocumentsDirectory();
-      return Directory('${appDocDir.path}/ReceivedFiles');
-    } else if (Platform.isIOS) {
-      // На iOS используем Documents directory
-      final appDocDir = await getApplicationDocumentsDirectory();
-      final receivedDir = Directory('${appDocDir.path}/ReceivedFiles');
-
-      // Создаем директорию, если не существует
-      if (!await receivedDir.exists()) {
-        await receivedDir.create(recursive: true);
-      }
-
-      return receivedDir;
     }
-
-    // Для других платформ
-    final downloadsDir = await getDownloadsDirectory();
-    if (downloadsDir != null) {
-      return Directory('${downloadsDir.path}/ReceivedFiles');
-    }
-
-    // Последний вариант
-    final appDocDir = await getApplicationDocumentsDirectory();
-    return appDocDir;
-  }
-
-  // Создание безопасного имени файла
-  String _createSafeFileName(String originalName) {
-    // Убираем небезопасные символы из имени файла
-    final safeName = originalName.replaceAll(RegExp(r'[^\w\.\-]'), '_');
 
     // Добавляем timestamp для уникальности
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-
-    // Если имя слишком длинное, обрезаем его
-    if (safeName.length > 100) {
-      final extension = safeName.split('.').last;
-      final nameWithoutExt = safeName.substring(
-        0,
-        safeName.length - extension.length - 1,
-      );
-      final shortenedName =
-          '${nameWithoutExt.substring(0, 50)}_$timestamp.$extension';
-      return shortenedName;
+    if (!safeName.contains(timestamp.toString())) {
+      safeName = '${timestamp}_$safeName';
     }
 
-    return '${timestamp}_$safeName';
+    return safeName;
   }
+
+  Future<Directory> _getSaveDirectoryViaSAF() async {
+    if (Platform.isAndroid) {
+      // Пробуем разные директории по порядку
+      final directories = [
+        // 1. Внешнее хранилище приложения
+        await getExternalStorageDirectory(),
+        // 2. Downloads директория приложения
+        await getDownloadsDirectory(),
+        // 3. Documents директория
+        await getApplicationDocumentsDirectory(),
+        // 4. Temporary директория
+        await getTemporaryDirectory(),
+      ];
+
+      for (final dir in directories) {
+        if (dir != null) {
+          try {
+            final testDir = Directory('${dir.path}/ReceivedFiles');
+            if (!await testDir.exists()) {
+              await testDir.create(recursive: true);
+            }
+
+            // Проверяем возможность записи
+            final testFile = File('${testDir.path}/test.tmp');
+            await testFile.writeAsString('test');
+            await testFile.delete();
+
+            print('✅ Используем директорию: ${testDir.path}');
+            return testDir;
+          } catch (e) {
+            print('Не могу использовать ${dir.path}: $e');
+            continue;
+          }
+        }
+      }
+
+      // Если ничего не сработало, используем временную директорию
+      final tempDir = await getTemporaryDirectory();
+      return Directory('${tempDir.path}/ReceivedFiles');
+    }
+
+    // Для iOS и других платформ
+    final appDocDir = await getApplicationDocumentsDirectory();
+    return Directory('${appDocDir.path}/ReceivedFiles');
+  }
+
+  Future<void> _saveFileAlternative(
+    FileReceiver receiver,
+    String transferId,
+  ) async {
+    // Альтернативный способ через MediaStore или временное хранение
+    final tempDir = await getTemporaryDirectory();
+    final tempFile = File('${tempDir.path}/temp_$transferId');
+
+    final fileBytes = receiver.assembleFile();
+    await tempFile.writeAsBytes(fileBytes);
+
+    print('⚠️ Файл сохранен во временную директорию: ${tempFile.path}');
+
+    // Создаем FileInfo с временным путем
+    final fileInfo = FileInfo(
+      id: transferId,
+      name: receiver.fileName,
+      path: tempFile.path,
+      size: receiver.fileSize,
+      hash: md5.convert(fileBytes).toString(),
+      mimeType: lookupMimeType(tempFile.path) ?? 'application/octet-stream',
+      modifiedDate: DateTime.now(),
+      status: FileTransferStatus.completed,
+      progress: 100,
+    );
+
+    _selectedFiles.add(fileInfo);
+
+    // Отправляем подтверждение с предупреждением
+    _sendMessage({
+      'type': 'file_received',
+      'transferId': transferId,
+      'fileName': receiver.fileName,
+      'fileSize': receiver.fileSize,
+      'filePath': tempFile.path,
+      'isTemporary': true,
+      'success': true,
+    });
+
+    notifyListeners();
+  }
+
+  Future<Directory> _getSaveDirectory() async {
+    try {
+      print('🔍 Получаем директорию для сохранения...');
+
+      // ВАЖНО: НИКОГДА не используем /storage/emulated/0/Download на Android 10+
+      // Вместо этого используем внутреннюю директорию приложения
+
+      if (Platform.isAndroid) {
+        // На Android используем Application Documents Directory
+        // Это приватная директория приложения, не требует разрешений
+        final appDocDir = await getApplicationDocumentsDirectory();
+        final receivedDir = Directory('${appDocDir.path}/ReceivedFiles');
+
+        print('Android: Application Documents Directory = ${appDocDir.path}');
+
+        // Создаем подпапку по дате для организации
+        final now = DateTime.now();
+        final dateDir = Directory(
+          '${receivedDir.path}/${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}',
+        );
+
+        if (!await dateDir.exists()) {
+          print('Создаем директорию: ${dateDir.path}');
+          await dateDir.create(recursive: true);
+        }
+
+        print('✅ Буду сохранять в: ${dateDir.path}');
+        return dateDir;
+      } else if (Platform.isIOS) {
+        // На iOS также используем Application Documents
+        final appDocDir = await getApplicationDocumentsDirectory();
+        final receivedDir = Directory('${appDocDir.path}/ReceivedFiles');
+
+        print('iOS: Application Documents Directory = ${appDocDir.path}');
+
+        if (!await receivedDir.exists()) {
+          print('Создаем директорию: ${receivedDir.path}');
+          await receivedDir.create(recursive: true);
+        }
+
+        print('✅ Буду сохранять в: ${receivedDir.path}');
+        return receivedDir;
+      }
+
+      // Для других платформ
+      final appDocDir = await getApplicationDocumentsDirectory();
+      return Directory('${appDocDir.path}/ReceivedFiles');
+    } catch (e) {
+      print('❌ Ошибка получения директории: $e');
+
+      // Fallback: временная директория (всегда доступна)
+      final tempDir = await getTemporaryDirectory();
+      print('⚠️ Использую временную директорию как fallback: ${tempDir.path}');
+      return tempDir;
+    }
+  }
+  // Создание безопасного имени файла
+  // String _createSafeFileName(String originalName) {
+  //   // Убираем небезопасные символы из имени файла
+  //   final safeName = originalName.replaceAll(RegExp(r'[^\w\.\-]'), '_');
+
+  //   // Добавляем timestamp для уникальности
+  //   final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+  //   // Если имя слишком длинное, обрезаем его
+  //   if (safeName.length > 100) {
+  //     final extension = safeName.split('.').last;
+  //     final nameWithoutExt = safeName.substring(
+  //       0,
+  //       safeName.length - extension.length - 1,
+  //     );
+  //     final shortenedName =
+  //         '${nameWithoutExt.substring(0, 50)}_$timestamp.$extension';
+  //     return shortenedName;
+  //   }
+
+  //   return '${timestamp}_$safeName';
+  // }
 
   void _completeFileTransfer(Map<String, dynamic> data) {
     final transferId = data['transferId'];
@@ -632,7 +775,17 @@ class FileTransferService extends ChangeNotifier {
 
     print('Передача завершена: $fileName ($transferId)');
 
+    // Удаляем из активных передач
     _activeTransfers.remove(transferId);
+
+    // На КЛИЕНТЕ очищаем transferId у файла
+    if (!_isServerRunning) {
+      final file = _selectedFiles.firstWhere((f) => f.transferId == transferId);
+
+      // Очищаем transferId, чтобы файл остался в списке
+      file.transferId = null;
+    }
+
     notifyListeners();
   }
 
@@ -669,9 +822,7 @@ class FileTransferService extends ChangeNotifier {
 
 // Обработчик подключений для сервера
 class _ServerConnectionHandler implements ClientConnectionDelegate {
-  final FileTransferService _service;
-
-  _ServerConnectionHandler(this._service);
+  _ServerConnectionHandler();
 
   @override
   Future<void> onClientConnected(Client client) async {
