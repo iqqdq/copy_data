@@ -1,9 +1,88 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../presentation.dart';
 
-class RoleSelectionScreen extends StatelessWidget {
+class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
+
+  @override
+  State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
+}
+
+class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPermissions();
+    });
+  }
+
+  Future<void> _checkPermissions() async {
+    bool _hasStoragePermission = false;
+
+    try {
+      print('🔐 Проверка разрешений...');
+
+      if (Platform.isAndroid) {
+        // Для Android
+        var status = await Permission.storage.status;
+
+        if (!status.isGranted) {
+          print('📱 Android: Запрашиваю разрешение на доступ к хранилищу');
+          status = await Permission.storage.request();
+
+          // Для Android 10+ может потребоваться доступ к медиа
+          if (Platform.isAndroid && await Permission.storage.isGranted) {
+            final mediaStatus = await Permission.accessMediaLocation.status;
+            if (!mediaStatus.isGranted) {
+              await Permission.accessMediaLocation.request();
+            }
+          }
+        }
+
+        _hasStoragePermission = status.isGranted;
+        print(
+          '📱 Android: Разрешение на хранилище: ${status.isGranted ? "✅" : "❌"}',
+        );
+      } else if (Platform.isIOS) {
+        // Для iOS
+        var photosStatus = await Permission.photos.status;
+
+        if (!photosStatus.isGranted) {
+          print('📱 iOS: Запрашиваю доступ к фотогалерее');
+          photosStatus = await Permission.photos.request();
+        }
+
+        // Для iOS также может потребоваться доступ к медиабиблиотеке
+        final mediaLibraryStatus = await Permission.mediaLibrary.status;
+        if (!mediaLibraryStatus.isGranted) {
+          // await Permission.mediaLibrary.request();
+        }
+
+        _hasStoragePermission = photosStatus.isGranted;
+        print(
+          '📱 iOS: Доступ к фотогалерее: ${photosStatus.isGranted ? "✅" : "❌"}',
+        );
+        print(
+          '📱 iOS: Доступ к медиабиблиотеке: ${mediaLibraryStatus.isGranted ? "✅" : "❌"}',
+        );
+      }
+
+      // Логируем итоговый статус
+      print(
+        '🔐 Итоговый статус разрешений: ${_hasStoragePermission ? "✅ Есть доступ" : "❌ Нет доступа"}',
+      );
+    } catch (e, stackTrace) {
+      print('❌ Ошибка при запросе разрешений: $e');
+      print('Stack: $stackTrace');
+      _hasStoragePermission = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

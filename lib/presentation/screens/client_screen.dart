@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/core.dart';
 import '../presentation.dart';
 
@@ -16,6 +17,7 @@ class _ClientScreenState extends State<ClientScreen> {
   final TextEditingController _ipController = TextEditingController();
   bool _isConnecting = false;
   bool _showScanner = false;
+  bool _isSending = false;
 
   @override
   void initState() {
@@ -52,37 +54,70 @@ class _ClientScreenState extends State<ClientScreen> {
     }
   }
 
-  Future<void> _sendFilesToServer() async {
+  Future<void> _sendFilesToServer(List<File> files) async {
     final service = Provider.of<FileTransferService>(context, listen: false);
 
-    if (service.selectedFiles.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Сначала добавьте файлы')));
+    if (!service.isConnected) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Сначала подключитесь к серверу')),
+        );
+      }
       return;
     }
 
+    setState(() => _isSending = true);
+
+    try {
+      await service.sendFiles(files);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${files.length} файл(ов) отправлено'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка отправки: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _pickAndSendMedia() async {
+    final service = Provider.of<FileTransferService>(context, listen: false);
+
     if (!service.isConnected) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Сначала подключитесь к серверу')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Сначала подключитесь к серверу')),
+        );
+      }
       return;
     }
 
     try {
-      await service.sendFiles(service.selectedFiles);
+      final pickedFiles = await ImagePicker().pickMultipleMedia();
+      final files = <File>[];
 
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Файлы отправлены')));
+      for (final image in pickedFiles) {
+        files.add(File(image.path));
+      }
+
+      if (files.isNotEmpty) {
+        await _sendFilesToServer(files);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Ошибка отправки: $e')));
-      }
+      print('Ошибка выбора файлов: $e');
     }
   }
 
@@ -99,12 +134,21 @@ class _ClientScreenState extends State<ClientScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Клиент'),
+        title: Text(service.status),
         actions: [
           if (isConnected)
             IconButton(
-              icon: Icon(Icons.send),
-              onPressed: _sendFilesToServer,
+              icon: _isSending
+                  ? SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(Icons.send),
+              onPressed: _isSending ? null : _pickAndSendMedia,
               tooltip: 'Отправить файлы',
             ),
           IconButton(
@@ -119,21 +163,6 @@ class _ClientScreenState extends State<ClientScreen> {
       body: _showScanner
           ? _buildQrScanner()
           : _buildMainContent(service, isConnected),
-      floatingActionButton: _showScanner
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => FilePickerScreen(),
-                    fullscreenDialog: true,
-                  ),
-                );
-              },
-              icon: Icon(Icons.add),
-              label: Text('Добавить файлы'),
-            ),
     );
   }
 
@@ -201,20 +230,6 @@ class _ClientScreenState extends State<ClientScreen> {
                         ),
                       ),
                     ),
-                    if (isConnected) ...[
-                      SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: () {
-                          service.disconnect();
-                          _ipController.clear();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: Text('Отключиться'),
-                      ),
-                    ],
                   ],
                 ),
               ],
@@ -222,89 +237,232 @@ class _ClientScreenState extends State<ClientScreen> {
           ),
         ),
 
-        // Статус подключения
-        if (isConnected && service.connectedServerName != null)
-          Card(
-            margin: EdgeInsets.symmetric(horizontal: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.green),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Подключено к:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          service.connectedServerName!,
-                          style: TextStyle(color: Colors.blue),
-                        ),
-                        if (service.connectedServerIp != null)
-                          Text(
-                            'IP: ${service.connectedServerIp}',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.info_outline),
-                    onPressed: () {
-                      _showConnectionInfo(service);
-                    },
-                    tooltip: 'Информация о подключении',
-                  ),
-                ],
+        SizedBox(height: 10),
+
+        // Кнопка отправки
+        if (isConnected) _buildQuickActions(),
+
+        SizedBox(height: 10),
+
+        // Прогресс бары для фото и видео
+        _buildProgressBars(service),
+
+        // Добавим место для скролла, если контент не помещается
+        Expanded(child: Container()),
+      ],
+    );
+  }
+
+  Widget _buildProgressBars(FileTransferService service) {
+    final transfers = service.activeTransfers.values.toList();
+
+    // Группируем по типу
+    final photoTransfers = transfers
+        .where(
+          (t) => t.fileType.startsWith('image/') || t.fileType == 'image/mixed',
+        )
+        .toList();
+
+    final videoTransfers = transfers
+        .where(
+          (t) => t.fileType.startsWith('video/') || t.fileType == 'video/mixed',
+        )
+        .toList();
+
+    // Рассчитываем средний прогресс для каждой группы
+    final photoProgress = _calculateAverageProgress(photoTransfers);
+    final videoProgress = _calculateAverageProgress(videoTransfers);
+
+    // Показываем только если есть активные передачи
+    final hasActiveTransfers = photoProgress > 0 || videoProgress > 0;
+
+    if (!hasActiveTransfers) {
+      return SizedBox.shrink(); // Не показываем, если нет активных передач
+    }
+
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Прогресс передачи:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 12),
+
+            // Прогресс для фото
+            if (photoTransfers.isNotEmpty)
+              _buildProgressBar(
+                icon: Icons.photo,
+                label: 'Фотографии',
+                count: photoTransfers.first.totalFiles,
+                progress: photoProgress,
+                color: Colors.blue,
+                progressText: _getProgressText(photoTransfers),
+              ),
+
+            if (photoTransfers.isNotEmpty && videoTransfers.isNotEmpty)
+              SizedBox(height: 8),
+
+            // Прогресс для видео
+            if (videoTransfers.isNotEmpty)
+              _buildProgressBar(
+                icon: Icons.videocam,
+                label: 'Видео',
+                count: videoTransfers.first.totalFiles,
+                progress: videoProgress,
+                color: Colors.green,
+                progressText: _getProgressText(videoTransfers),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _calculateAverageProgress(List<FileTransfer> transfers) {
+    if (transfers.isEmpty) return 0.0;
+    final total = transfers.fold(
+      0.0,
+      (sum, transfer) => sum + transfer.progress,
+    );
+    return total / transfers.length;
+  }
+
+  Widget _buildProgressBar({
+    required IconData icon,
+    required String label,
+    required int count,
+    required double progress,
+    required Color color,
+    required String progressText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '$label ($count)',
+                style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
               ),
             ),
-          ),
+            Text(
+              '${progress.toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 4),
+        LinearProgressIndicator(
+          value: progress / 100,
+          backgroundColor: color.withValues(alpha: 0.2),
+          valueColor: AlwaysStoppedAnimation<Color>(color),
+          minHeight: 6,
+        ),
+        SizedBox(height: 4),
+        // Строка с прогрессом в байтах
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                progressText,
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-        SizedBox(height: 10),
+  String _getProgressText(List<FileTransfer> transfers) {
+    if (transfers.isEmpty) return '';
 
-        // Статус передачи
-        _buildStatusCard(service),
+    // Для групповых передач (image/mixed или video/mixed)
+    if (transfers.length == 1 && transfers.first.totalFiles > 1) {
+      final transfer = transfers.first;
+      return '${transfer.progressSizeFormatted} • ${transfer.completedFiles}/${transfer.totalFiles} файлов';
+    }
 
-        SizedBox(height: 10),
+    // Для одиночных файлов
+    int totalReceived = 0;
+    int totalSize = 0;
+    int completed = 0;
+    int total = transfers.length;
 
-        // Вкладки
-        Expanded(
-          child: DefaultTabController(
-            length: 2,
-            child: Column(
+    for (final transfer in transfers) {
+      totalReceived += transfer.receivedBytes;
+      totalSize += transfer.fileSize;
+      if (transfer.progress >= 100) completed++;
+    }
+
+    return '${_formatBytes(totalReceived)} / ${_formatBytes(totalSize)} • $completed/$total файлов';
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  Widget _buildQuickActions() {
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Отправка файлов:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                TabBar(
-                  tabs: [
-                    Tab(
-                      icon: Icon(Icons.insert_drive_file),
-                      text: 'Файлы (${service.selectedFiles.length})',
-                    ),
-                    Tab(
-                      icon: Icon(Icons.history),
-                      text: 'Передачи (${service.activeTransfers.length})',
-                    ),
-                  ],
-                ),
                 Expanded(
-                  child: TabBarView(
-                    children: [
-                      // Вкладка файлов
-                      _buildFilesTab(service),
-
-                      // Вкладка передач
-                      _buildTransfersTab(service),
-                    ],
+                  child: ElevatedButton.icon(
+                    icon: _isSending
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(Icons.photo, size: 20),
+                    label: Text(_isSending ? 'Отправка...' : 'Выбрать файлы'),
+                    onPressed: _isSending ? null : _pickAndSendMedia,
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -339,404 +497,9 @@ class _ClientScreenState extends State<ClientScreen> {
     );
   }
 
-  Widget _buildStatusCard(FileTransferService service) {
-    final hasActiveTransfers = service.activeTransfers.isNotEmpty;
-
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          children: [
-            Icon(
-              service.isConnected ? Icons.check_circle : Icons.warning,
-              color: service.isConnected ? Colors.green : Colors.orange,
-            ),
-            SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    service.status,
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  if (service.isConnected)
-                    Text(
-                      'IP: ${service.connectedServerIp ?? "неизвестен"}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                ],
-              ),
-            ),
-            if (hasActiveTransfers)
-              Chip(
-                label: Text(
-                  '${service.activeTransfers.length} активных',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
-                ),
-                backgroundColor: Colors.blue,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilesTab(FileTransferService service) {
-    if (service.selectedFiles.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.folder_open, size: 80, color: Colors.grey[300]),
-            SizedBox(height: 20),
-            Text(
-              'Нет файлов для отправки',
-              style: TextStyle(fontSize: 18, color: Colors.grey[500]),
-            ),
-            SizedBox(height: 10),
-            ElevatedButton.icon(
-              icon: Icon(Icons.add),
-              label: Text('Добавить файлы'),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => FilePickerScreen(),
-                    fullscreenDialog: true,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        // Панель управления
-        // Панель информации
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          color: Theme.of(context).cardColor,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${service.selectedFiles.length} файлов выбрано',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Общий размер: ${_calculateTotalSize(service.selectedFiles)}',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    SizedBox(height: 8),
-                    Row(
-                      children: [
-                        ElevatedButton(
-                          onPressed:
-                              service.selectedFiles.isNotEmpty &&
-                                  service.isConnected
-                              ? _sendFilesToServer
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                          ),
-                          child: Text('Отправить все'),
-                        ),
-                        SizedBox(width: 8),
-                        IconButton(
-                          icon: Icon(Icons.clear_all),
-                          onPressed: service.selectedFiles.isNotEmpty
-                              ? () => service.clearFiles()
-                              : null,
-                          tooltip: 'Очистить все',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Список файлов
-        Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.all(8),
-            itemCount: service.selectedFiles.length,
-            itemBuilder: (context, index) {
-              final file = service.selectedFiles[index];
-              return FileItem(
-                file: file,
-                onRemove: () => service.removeFile(file.id),
-                onOpen: file.status == FileTransferStatus.completed
-                    ? () => _openFile(file)
-                    : null,
-                showProgress: true,
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTransfersTab(FileTransferService service) {
-    if (service.activeTransfers.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.cloud_upload, size: 80, color: Colors.grey[300]),
-            SizedBox(height: 20),
-            Text(
-              'Нет активных передач',
-              style: TextStyle(fontSize: 18, color: Colors.grey[500]),
-            ),
-            SizedBox(height: 10),
-            Text(
-              'Начните отправку файлов,\nчтобы увидеть прогресс здесь',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[400]),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        // Заголовок
-        Container(
-          padding: EdgeInsets.all(12),
-          color: Colors.blue[50],
-          child: Row(
-            children: [
-              Icon(Icons.cloud_upload, color: Colors.blue),
-              SizedBox(width: 10),
-              Text(
-                'Активные передачи: ${service.activeTransfers.length}',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
-
-        // Список передач
-        Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.all(8),
-            itemCount: service.activeTransfers.length,
-            itemBuilder: (context, index) {
-              final transfer = service.activeTransfers.values.elementAt(index);
-              return Card(
-                margin: EdgeInsets.symmetric(vertical: 4),
-                child: ListTile(
-                  leading: Icon(
-                    Icons.file_copy,
-                    color: _getFileColor(transfer.file.mimeType),
-                  ),
-                  title: Text(
-                    transfer.file.name,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      LinearProgressIndicator(
-                        value: transfer.file.progress / 100,
-                        backgroundColor: Colors.grey[200],
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                      ),
-                      SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${transfer.file.progress.toStringAsFixed(1)}%',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          Text(
-                            _formatFileSize(transfer.file.size),
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  trailing: IconButton(
-                    icon: Icon(Icons.cancel, size: 20),
-                    onPressed: () {
-                      // TODO: Добавить отмену передачи
-                    },
-                    tooltip: 'Отменить',
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _calculateTotalSize(List<FileInfo> files) {
-    final totalBytes = files.fold<int>(0, (sum, file) => sum + file.size);
-    return _formatFileSize(totalBytes);
-  }
-
-  String _formatFileSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-  }
-
-  Color _getFileColor(String mimeType) {
-    if (mimeType.startsWith('image/')) return Colors.red;
-    if (mimeType.startsWith('video/')) return Colors.purple;
-    if (mimeType.startsWith('audio/')) return Colors.blue;
-    if (mimeType.contains('pdf')) return Colors.red;
-    if (mimeType.contains('word') || mimeType.contains('document')) {
-      return Colors.blue;
-    }
-    if (mimeType.contains('excel') || mimeType.contains('sheet')) {
-      return Colors.green;
-    }
-    return Colors.grey;
-  }
-
-  void _showConnectionInfo(FileTransferService service) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Информация о подключении'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildInfoRow(
-              'Статус:',
-              service.isConnected ? 'Подключено' : 'Не подключено',
-            ),
-            if (service.connectedServerIp != null)
-              _buildInfoRow('IP сервера:', service.connectedServerIp!),
-            if (service.connectedServerName != null)
-              _buildInfoRow('Имя сервера:', service.connectedServerName!),
-            _buildInfoRow('Статус сервиса:', service.status),
-            SizedBox(height: 10),
-            Divider(),
-            SizedBox(height: 10),
-            Text('Статистика:', style: TextStyle(fontWeight: FontWeight.bold)),
-            _buildInfoRow('Выбрано файлов:', '${service.selectedFiles.length}'),
-            _buildInfoRow(
-              'Активных передач:',
-              '${service.activeTransfers.length}',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Закрыть'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Text(label, style: TextStyle(fontWeight: FontWeight.w500)),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: TextStyle(color: Colors.blue),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void dispose() {
     _ipController.dispose();
     super.dispose();
-  }
-
-  Future<void> _openFile(FileInfo file) async {
-    try {
-      // Запрашиваем разрешения (если нужно)
-      final hasPermission = await FileOpener.requestStoragePermission();
-
-      if (!hasPermission && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Необходимо разрешение на доступ к файлам')),
-        );
-        return;
-      }
-
-      // Проверяем, существует ли файл
-      final fileObj = File(file.path);
-      if (!await fileObj.exists() && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Файл не найден: ${file.name}')));
-        return;
-      }
-
-      // Проверяем, поддерживается ли тип файла
-      if (!FileOpener.isFileTypeSupported(file.path) && mounted) {
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('Предупреждение'),
-            content: Text(
-              'Этот тип файла может не поддерживаться. Продолжить?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text('Отмена'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text('Продолжить'),
-              ),
-            ],
-          ),
-        );
-
-        if (confirm != true) return;
-      }
-
-      await FileOpener.openFile(file.path);
-    } catch (e) {
-      if (mounted) {
-        Navigator.pop(context); // Закрываем диалог загрузки
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Ошибка открытия файла: $e')));
-      }
-    }
   }
 }
