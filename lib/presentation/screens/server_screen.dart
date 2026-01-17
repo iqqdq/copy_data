@@ -51,14 +51,6 @@ class _ServerScreenState extends State<ServerScreen> {
 
           // Прогресс бары для принимаемых файлов
           _buildProgressBars(service),
-
-          SizedBox(height: 10),
-
-          // Список активных передач
-          _buildActiveTransfersList(service),
-
-          // Полученные файлы
-          Expanded(child: _buildReceivedFiles(service)),
         ],
       ),
     );
@@ -322,46 +314,6 @@ class _ServerScreenState extends State<ServerScreen> {
     );
   }
 
-  Widget _buildActiveTransfersList(FileTransferService service) {
-    final transfers = service.activeTransfers.values.toList();
-
-    if (transfers.isEmpty) {
-      return SizedBox.shrink();
-    }
-
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.cloud_download, size: 20, color: Colors.orange),
-                SizedBox(width: 8),
-                Text(
-                  'Активные передачи (${transfers.length})',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-              ],
-            ),
-            SizedBox(height: 8),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              itemCount: transfers.length,
-              itemBuilder: (context, index) {
-                final transfer = transfers[index];
-                return _buildTransferItem(transfer);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildTransferItem(FileTransfer transfer) {
     return Container(
       margin: EdgeInsets.only(bottom: 8),
@@ -425,126 +377,6 @@ class _ServerScreenState extends State<ServerScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildReceivedFiles(FileTransferService service) {
-    final receivedMedia = service.receivedMedia;
-
-    return Card(
-      margin: EdgeInsets.all(8),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              children: [
-                Icon(Icons.folder, size: 20, color: Colors.purple),
-                SizedBox(width: 8),
-                Text(
-                  'Полученные файлы (${receivedMedia.length})',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                Spacer(),
-                IconButton(
-                  icon: Icon(Icons.refresh, size: 18),
-                  onPressed: () {
-                    service.refreshReceivedMedia();
-                  },
-                  tooltip: 'Обновить',
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1),
-          Expanded(
-            child: receivedMedia.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.folder_open,
-                          size: 64,
-                          color: Colors.grey[300],
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Полученные файлы отсутствуют',
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 16,
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Файлы появятся здесь после приема',
-                          style: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: EdgeInsets.all(0),
-                    itemCount: receivedMedia.length,
-                    itemBuilder: (context, index) {
-                      final media = receivedMedia[index];
-                      return _buildMediaItem(service, media);
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMediaItem(FileTransferService service, ReceivedMedia media) {
-    return ListTile(
-      leading: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: media.isImage ? Colors.blue[50] : Colors.green[50],
-        ),
-        child: Icon(
-          media.isImage ? Icons.photo : Icons.videocam,
-          color: media.isImage ? Colors.blue : Colors.green,
-          size: 24,
-        ),
-      ),
-      title: Text(
-        media.fileName,
-        style: TextStyle(fontWeight: FontWeight.w500),
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Размер: ${media.sizeFormatted}',
-            style: TextStyle(fontSize: 12),
-          ),
-          Text(
-            'Получено: ${_formatDate(media.receivedAt)}',
-            style: TextStyle(fontSize: 11, color: Colors.grey),
-          ),
-        ],
-      ),
-      trailing: IconButton(
-        icon: Icon(Icons.open_in_new, size: 20),
-        onPressed: () {
-          service.openMediaInGallery(media);
-        },
-        tooltip: 'Открыть',
-      ),
-      onTap: () {
-        service.openMediaInGallery(media);
-      },
-      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 
