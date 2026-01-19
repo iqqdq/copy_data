@@ -98,7 +98,7 @@ class _ClientScreenState extends State<ClientScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Клиент'),
+        title: Text('Files received'),
         backgroundColor: Colors.blue,
         actions: [
           if (isConnected)
@@ -313,15 +313,16 @@ class _ClientScreenState extends State<ClientScreen> {
   }
 
   String _getProgressText(List<FileTransfer> transfers) {
-    // if (transfers.isEmpty) return 'Нет активных передач';
-
-    // Для групповых передач (image/mixed или video/mixed) - ОРИГИНАЛЬНАЯ ЛОГИКА
+    // Для групповых передач (image/mixed или video/mixed)
     if (transfers.length == 1 && transfers.first.totalFiles > 1) {
       final transfer = transfers.first;
-      return '${transfer.progressSizeFormatted} • ${transfer.completedFiles}/${transfer.totalFiles} файлов';
+      // Отображаем прогресс даже если нет завершенных файлов
+      final completed = transfer.completedFiles;
+      final total = transfer.totalFiles;
+      return '${transfer.progressSizeFormatted} • $completed/$total файлов';
     }
 
-    // Для одиночных файлов - ОРИГИНАЛЬНАЯ ЛОГИКА
+    // Для одиночных файлов
     int totalReceived = 0;
     int totalSize = 0;
     int completed = 0;
@@ -333,18 +334,25 @@ class _ClientScreenState extends State<ClientScreen> {
       if (transfer.progress >= 100) completed++;
     }
 
-    return '${_formatBytes(totalReceived)} / ${_formatBytes(totalSize)} • $completed/$total файлов';
+    return '${_formatBytes(totalReceived, totalSize)} • $completed/$total файлов';
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  String _formatBytes(int bytes, int totalBytes) {
+    // Синхронизируем единицы измерения на основе общего размера
+    if (totalBytes >= 1024 * 1024) {
+      // Для больших файлов используем MB
+      final bytesMB = bytes / (1024 * 1024);
+      final totalMB = totalBytes / (1024 * 1024);
+      return '${bytesMB.toStringAsFixed(2)} / ${totalMB.toStringAsFixed(2)} MB';
+    } else if (totalBytes >= 1024) {
+      // Для средних файлов используем KB
+      final bytesKB = bytes / 1024;
+      final totalKB = totalBytes / 1024;
+      return '${bytesKB.toStringAsFixed(2)} / ${totalKB.toStringAsFixed(2)} KB';
+    } else {
+      // Для маленьких файлов используем байты
+      return '$bytes / $totalBytes B';
     }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
   @override

@@ -83,7 +83,7 @@ class _ServerScreenState extends State<ServerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Сервер'),
+        title: Text('Sending files'),
         backgroundColor: Colors.green,
         actions: [
           IconButton(
@@ -282,55 +282,56 @@ class _ServerScreenState extends State<ServerScreen> {
                 style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
               ),
             ),
-            if (count > 0)
-              Text(
-                '${progress.toStringAsFixed(1)}%',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: color,
-                ),
+            // if (count > 0)
+            Text(
+              '${progress.toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: color,
               ),
+            ),
           ],
         ),
-        if (count > 0) ...[
-          SizedBox(height: 4),
-          LinearProgressIndicator(
-            value: progress / 100,
-            backgroundColor: color.withOpacity(0.2),
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-            minHeight: 6,
-          ),
-          SizedBox(height: 4),
-          Text(
-            progressText,
-            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-          ),
-        ] else ...[
-          SizedBox(height: 4),
-          Text(
-            'Нет активных передач',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[600],
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
+        // if (count > 0) ...[
+        SizedBox(height: 4),
+        LinearProgressIndicator(
+          value: progress / 100,
+          backgroundColor: color.withOpacity(0.2),
+          valueColor: AlwaysStoppedAnimation<Color>(color),
+          minHeight: 6,
+        ),
+        SizedBox(height: 4),
+        Text(
+          progressText,
+          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+        ),
+        // ] else ...[
+        //   SizedBox(height: 4),
+        //   Text(
+        //     'Нет активных передач',
+        //     style: TextStyle(
+        //       fontSize: 11,
+        //       color: Colors.grey[600],
+        //       fontStyle: FontStyle.italic,
+        //     ),
+        //   ),
+        // ],
       ],
     );
   }
 
   String _getProgressText(List<FileTransfer> transfers) {
-    // if (transfers.isEmpty) return 'Нет активных передач';
-
-    // Для групповых передач (image/mixed или video/mixed) - ОРИГИНАЛЬНАЯ ЛОГИКА
+    // Для групповых передач (image/mixed или video/mixed)
     if (transfers.length == 1 && transfers.first.totalFiles > 1) {
       final transfer = transfers.first;
-      return '${transfer.progressSizeFormatted} • ${transfer.completedFiles}/${transfer.totalFiles} файлов';
+      // Отображаем прогресс даже если нет завершенных файлов
+      final completed = transfer.completedFiles;
+      final total = transfer.totalFiles;
+      return '${transfer.progressSizeFormatted} • $completed/$total файлов';
     }
 
-    // Для одиночных файлов - ОРИГИНАЛЬНАЯ ЛОГИКА
+    // Для одиночных файлов
     int totalReceived = 0;
     int totalSize = 0;
     int completed = 0;
@@ -342,18 +343,25 @@ class _ServerScreenState extends State<ServerScreen> {
       if (transfer.progress >= 100) completed++;
     }
 
-    return '${_formatBytes(totalReceived)} / ${_formatBytes(totalSize)} • $completed/$total файлов';
+    return '${_formatBytes(totalReceived, totalSize)} • $completed/$total файлов';
   }
 
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  String _formatBytes(int bytes, int totalBytes) {
+    // Синхронизируем единицы измерения на основе общего размера
+    if (totalBytes >= 1024 * 1024) {
+      // Для больших файлов используем MB
+      final bytesMB = bytes / (1024 * 1024);
+      final totalMB = totalBytes / (1024 * 1024);
+      return '${bytesMB.toStringAsFixed(2)} / ${totalMB.toStringAsFixed(2)} MB';
+    } else if (totalBytes >= 1024) {
+      // Для средних файлов используем KB
+      final bytesKB = bytes / 1024;
+      final totalKB = totalBytes / 1024;
+      return '${bytesKB.toStringAsFixed(2)} / ${totalKB.toStringAsFixed(2)} KB';
+    } else {
+      // Для маленьких файлов используем байты
+      return '$bytes / $totalBytes B';
     }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
   @override

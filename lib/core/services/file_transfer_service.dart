@@ -411,7 +411,13 @@ class FileTransferService extends ChangeNotifier {
       // Рассчитываем общий размер фото
       int totalPhotoSize = 0;
       for (final file in photoFiles) {
-        totalPhotoSize += await file.length();
+        try {
+          final length = await file.length();
+          totalPhotoSize += length;
+          print('📊 Фото ${path.basename(file.path)}: ${_formatBytes(length)}');
+        } catch (e) {
+          print('⚠️ Ошибка получения размера фото: $e');
+        }
       }
 
       _activeTransfers[photoTransferId] = FileTransfer(
@@ -426,10 +432,10 @@ class FileTransferService extends ChangeNotifier {
         },
         onComplete: (file) {
           print('✅ Все фото отправлены с сервера');
-          Future.delayed(Duration(seconds: 3), () {
-            _activeTransfers.remove(photoTransferId);
-            notifyListeners();
-          });
+          // Future.delayed(Duration(seconds: 3), () { // TODO: DELETE
+          //   _activeTransfers.remove(photoTransferId);
+          //   notifyListeners();
+          // });
         },
         onError: (error) {
           print('❌ Ошибка отправки фото: $error');
@@ -461,7 +467,15 @@ class FileTransferService extends ChangeNotifier {
       // Рассчитываем общий размер видео
       int totalVideoSize = 0;
       for (final file in videoFiles) {
-        totalVideoSize += await file.length();
+        try {
+          final length = await file.length();
+          totalVideoSize += length;
+          print(
+            '📊 Видео ${path.basename(file.path)}: ${_formatBytes(length)}',
+          );
+        } catch (e) {
+          print('⚠️ Ошибка получения размера видео: $e');
+        }
       }
 
       _activeTransfers[videoTransferId] = FileTransfer(
@@ -476,10 +490,10 @@ class FileTransferService extends ChangeNotifier {
         },
         onComplete: (file) {
           print('✅ Все видео отправлены с сервера');
-          Future.delayed(Duration(seconds: 3), () {
-            _activeTransfers.remove(videoTransferId);
-            notifyListeners();
-          });
+          // Future.delayed(Duration(seconds: 3), () { // TODO: DELETE
+          //   _activeTransfers.remove(videoTransferId);
+          //   notifyListeners();
+          // });
         },
         onError: (error) {
           print('❌ Ошибка отправки видео: $error');
@@ -505,7 +519,7 @@ class FileTransferService extends ChangeNotifier {
 
     notifyListeners();
 
-    // Отправляем файлы группами - ВОССТАНАВЛИВАЕМ ОРИГИНАЛЬНУЮ ЛОГИКУ
+    // Отправляем файлы группами
     if (photoFiles.isNotEmpty) {
       print('🚀 Начинаю отправку ${photoFiles.length} фото с сервера...');
       await _sendFileGroupFromServer(
@@ -541,6 +555,20 @@ class FileTransferService extends ChangeNotifier {
       return;
     }
 
+    // ОТПРАВЛЯЕМ МЕТАДАННЫЕ ГРУППЫ ПЕРЕД НАЧАЛОМ ПЕРЕДАЧИ
+    final groupMetadata = {
+      'type': 'group_metadata',
+      'transferId': groupTransferId,
+      'fileName': transfer.fileName,
+      'totalFiles': files.length,
+      'totalSize': transfer.fileSize,
+      'fileType': isVideoGroup ? 'video/mixed' : 'image/mixed',
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+
+    socket.add(jsonEncode(groupMetadata));
+    await Future.delayed(Duration(milliseconds: 100));
+
     int totalBytesSent = 0;
     final int totalGroupSize = transfer.fileSize;
 
@@ -552,6 +580,7 @@ class FileTransferService extends ChangeNotifier {
     // Начальный прогресс
     transfer.receivedBytes = 0;
     transfer.onProgress(0.0);
+
     // Отправляем начальный прогресс клиенту
     _sendProgressUpdateToClient(
       socket,
@@ -661,7 +690,7 @@ class FileTransferService extends ChangeNotifier {
           fileToSend = convertedFile;
           fileType = 'video/mp4';
         }
-      } else if (isVideoGroup) {
+      } else {
         // Для видео без конвертации сразу отправляем прогресс начала файла
         _sendProgressUpdateToClient(
           socket,
@@ -759,8 +788,6 @@ class FileTransferService extends ChangeNotifier {
             totalGroupSize,
           );
         }
-
-        await Future.delayed(Duration(milliseconds: 10));
       }
 
       // Финальное сообщение для файла
@@ -945,6 +972,9 @@ class FileTransferService extends ChangeNotifier {
             notifyListeners();
           }
           break;
+        case 'group_metadata':
+          _handleGroupMetadataFromServer(data);
+          break;
         case 'file_metadata':
           _handleFileMetadataFromServer(data);
           break;
@@ -960,6 +990,66 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
+  void _handleGroupMetadataFromServer(Map<String, dynamic> data) async {
+    try {
+      final transferId = data['transferId'] as String;
+      final fileName = data['fileName'] as String;
+      final totalFiles = data['totalFiles'] as int;
+      final totalSize = data['totalSize'] as int;
+      final fileType = data['fileType'] as String;
+
+      print(
+        '📦 Клиент получает метаданные группы от сервера: $fileName '
+        '($totalFiles файлов, ${_formatBytes(totalSize)})',
+      );
+
+      // Создаем групповую передачу ТОЛЬКО если ее еще нет
+      if (!_activeTransfers.containsKey(transferId)) {
+        final transfer = FileTransfer(
+          transferId: transferId,
+          fileName: fileName,
+          fileSize: totalSize, // ← РАЗМЕР ИЗ СЕРВЕРА (окончательный!)
+          fileType: fileType,
+          file: File(''), // Временный файл
+          targetPath: '',
+          onProgress: (progress) {
+            notifyListeners();
+          },
+          onComplete: (file) {
+            print('✅ Групповая передача завершена: $fileName');
+            // Future.delayed(Duration(seconds: 3), () { // TODO: DELETE
+            //   _activeTransfers.remove(transferId);
+            //   notifyListeners();
+            // });
+          },
+          onError: (error) {
+            print('❌ Ошибка групповой передачи: $error');
+            _activeTransfers.remove(transferId);
+            notifyListeners();
+          },
+          sendMessage: (message) {
+            _sendClientMessage(message);
+          },
+          totalFiles: totalFiles,
+          completedFiles: 0,
+        );
+
+        _activeTransfers[transferId] = transfer;
+        print(
+          '✅ Создана групповая передача от сервера: $transferId '
+          '($totalFiles файлов, ${_formatBytes(totalSize)})',
+        );
+        notifyListeners();
+      } else {
+        // Обновляем существующую передачу - НЕ ДОЛЖНО БЫТЬ НУЖНО
+        // но на всякий случай логируем
+        print('⚠️ Групповая передача уже существует: $transferId');
+      }
+    } catch (e) {
+      print('❌ Ошибка обработки метаданных группы от сервера: $e');
+    }
+  }
+
   void _handleFileMetadataFromServer(Map<String, dynamic> data) async {
     try {
       final transferId = data['transferId'] as String;
@@ -968,11 +1058,10 @@ class FileTransferService extends ChangeNotifier {
       final fileType = data['fileType'] as String;
 
       print(
-        '📥 Клиент получает метаданные от сервера: $fileName ($fileSize байт)',
+        '📥 Клиент получает метаданные файла от сервера: $fileName (${_formatBytes(fileSize)})',
       );
 
       // Определяем, является ли это групповой передачей
-      // Если transferId содержит "_" и последняя часть - число, это файл в группе
       final isGroupFile =
           transferId.contains('_') && RegExp(r'_\d+$').hasMatch(transferId);
       String groupTransferId = transferId;
@@ -1003,7 +1092,9 @@ class FileTransferService extends ChangeNotifier {
       if (isGroupFile && _activeTransfers.containsKey(groupTransferId)) {
         groupTransfer = _activeTransfers[groupTransferId];
         print(
-          '📊 Найдена групповая передача от сервера: ${groupTransfer!.fileName}',
+          '📊 Найдена групповая передача от сервера: ${groupTransfer!.fileName} '
+          '(${groupTransfer.completedFiles}/${groupTransfer.totalFiles} файлов, '
+          '${_formatBytes(groupTransfer.fileSize)})',
         );
       }
 
@@ -1015,6 +1106,7 @@ class FileTransferService extends ChangeNotifier {
         tempFile: File(tempPath),
         socket: null,
         onProgress: (progress) {
+          // Прогресс для отдельного файла
           print(
             '📥 Прогресс приема $fileName: ${progress.toStringAsFixed(1)}%',
           );
@@ -1034,17 +1126,35 @@ class FileTransferService extends ChangeNotifier {
           // Обновляем счетчик завершенных файлов в групповой передаче
           if (isGroupFile && groupTransfer != null) {
             groupTransfer.completedFiles++;
+
+            print(
+              '✅ Файл ${fileIndex + 1}/${groupTransfer.totalFiles} завершен: $fileName '
+              '(${_formatBytes(fileSize)})',
+            );
+
             if (groupTransfer.completedFiles >= groupTransfer.totalFiles) {
               print(
-                '🎉 Вся группа от сервера завершена: ${groupTransfer.fileName}',
+                '🎉 Вся группа от сервера завершена: ${groupTransfer.fileName} '
+                '(${groupTransfer.completedFiles} файлов, '
+                '${_formatBytes(groupTransfer.fileSize)})',
               );
-              _activeTransfers.remove(groupTransferId);
+
+              // Обновляем прогресс до 100%
+              groupTransfer.receivedBytes = groupTransfer.fileSize;
+              groupTransfer.onProgress(100.0);
+
+              // Ждем немного перед удалением, чтобы UI показал 100%
+              // await Future.delayed(Duration(seconds: 2));
+              // _activeTransfers.remove(groupTransferId); // TODO: DELETE
             }
             notifyListeners();
           } else {
             // Для одиночных файлов удаляем передачу
-            _activeTransfers.remove(transferId);
-            notifyListeners();
+            print('✅ Одиночный файл завершен: $fileName');
+            // Future.delayed(Duration(seconds: 2), () { // TODO: DELETE
+            //   _activeTransfers.remove(transferId);
+            //   notifyListeners();
+            // });
           }
 
           final media = ReceivedMedia(
@@ -1060,9 +1170,13 @@ class FileTransferService extends ChangeNotifier {
         onError: (error) {
           print('❌ Ошибка приема файла $fileName: $error');
           _fileReceivers.remove(transferId);
-          _activeTransfers.remove(transferId);
+
+          // Удаляем только соответствующую передачу
           if (isGroupFile) {
-            _activeTransfers.remove(groupTransferId);
+            // Для групповой передачи не удаляем всю группу при ошибке одного файла
+            print('⚠️ Ошибка в файле ${fileIndex + 1} групповой передачи');
+          } else {
+            _activeTransfers.remove(transferId);
           }
           notifyListeners();
         },
@@ -1070,28 +1184,13 @@ class FileTransferService extends ChangeNotifier {
 
       _fileReceivers[transferId] = receiver;
 
-      // Если это первый файл в группе или одиночный файл, создаем запись о передаче
-      if (!isGroupFile || groupTransfer == null) {
-        String displayName;
-        int totalFiles = 1;
-
-        if (isGroupFile) {
-          // Это первый файл в группе - создаем групповую передачу
-          displayName = fileType.startsWith('image/')
-              ? 'Фотографии от сервера'
-              : 'Видео от сервера';
-          totalFiles = 1; // Пока не знаем сколько всего файлов
-        } else {
-          displayName = fileName;
-        }
-
+      // Если это НЕ групповая передача, создаем запись о передаче
+      if (!isGroupFile) {
         final transfer = FileTransfer(
-          transferId: isGroupFile ? groupTransferId : transferId,
-          fileName: displayName,
+          transferId: transferId,
+          fileName: fileName,
           fileSize: fileSize,
-          fileType: isGroupFile
-              ? (fileType.startsWith('image/') ? 'image/mixed' : 'video/mixed')
-              : fileType,
+          fileType: fileType,
           file: File(tempPath),
           targetPath: tempPath,
           onProgress: (progress) {
@@ -1099,34 +1198,29 @@ class FileTransferService extends ChangeNotifier {
           },
           onComplete: (file) {
             print('✅ Передача от сервера завершена');
+            // Future.delayed(Duration(seconds: 2), () { // TODO: DELETE
+            //   _activeTransfers.remove(transferId);
+            //   notifyListeners();
+            // });
           },
           onError: (error) {
             print('❌ Ошибка передачи от сервера: $error');
+            _activeTransfers.remove(transferId);
+            notifyListeners();
           },
           sendMessage: (message) {
             _sendClientMessage(message);
           },
-          totalFiles: totalFiles,
+          totalFiles: 1,
           completedFiles: 0,
         );
 
-        if (isGroupFile) {
-          _activeTransfers[groupTransferId] = transfer;
-          print('✅ Создана групповая передача от сервера: $groupTransferId');
-        } else {
-          _activeTransfers[transferId] = transfer;
-        }
-
-        notifyListeners();
-      } else {
-        // Обновляем общий размер групповой передачи
-        groupTransfer.fileSize += fileSize;
-        groupTransfer.totalFiles = max(groupTransfer.totalFiles, fileIndex + 1);
-        print(
-          '📊 Обновлена групповая передача от сервера: общий размер ${groupTransfer.fileSize} байт, файлов: ${groupTransfer.totalFiles}',
-        );
+        _activeTransfers[transferId] = transfer;
+        print('✅ Создана передача для одиночного файла: $fileName');
         notifyListeners();
       }
+      // Для групповых передач НЕ создаем новую передачу и НЕ меняем размер!
+      // Передача уже должна быть создана из group_metadata
 
       // Подтверждаем получение метаданных
       _sendClientMessage({
@@ -1240,9 +1334,21 @@ class FileTransferService extends ChangeNotifier {
         // Находим соответствующую передачу на клиенте
         final transfer = _activeTransfers[transferId];
         if (transfer != null) {
+          // ОБНОВЛЯЕМ только полученные байты и прогресс
+          // НЕ меняем общий размер (totalBytes) - он уже установлен из group_metadata
           transfer.receivedBytes = receivedBytes;
-          transfer.fileSize = totalBytes;
-          transfer.onProgress(progress);
+
+          // Убеждаемся, что прогресс не превышает 100%
+          final clampedProgress = progress.clamp(0.0, 100.0);
+          transfer.onProgress(clampedProgress);
+
+          // Логируем для отладки
+          print(
+            '📊 Обновлен прогресс группы: ${transfer.fileName} '
+            '${transfer.receivedBytes}/${transfer.fileSize} байт '
+            '(${clampedProgress.toStringAsFixed(1)}%)',
+          );
+
           notifyListeners();
         }
       }
@@ -1865,10 +1971,20 @@ class FileTransferService extends ChangeNotifier {
   }
 
   // Вспомогательный метод для форматирования байт
-  String _formatBytes(int bytes) {
+  String _formatBytes(int bytes, {bool forceSameUnit = false}) {
+    if (forceSameUnit) {
+      // Принудительно используем MB для всех значений > 1MB
+      if (bytes >= 1024 * 1024) {
+        return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+      }
+      // Для значений < 1MB используем KB
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    }
+
+    // Оригинальная логика
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
     }
     if (bytes < 1024 * 1024 * 1024) {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
@@ -2059,7 +2175,21 @@ class FileTransfer {
   }
 
   String get progressSizeFormatted {
-    return '${_formatBytes(receivedBytes)} / ${_formatBytes(fileSize)}';
+    // Используем синхронизированные единицы измерения
+    if (fileSize >= 1024 * 1024) {
+      // Для больших файлов используем MB для обоих
+      final receivedMB = receivedBytes / (1024 * 1024);
+      final totalMB = fileSize / (1024 * 1024);
+      return '${receivedMB.toStringAsFixed(2)} / ${totalMB.toStringAsFixed(2)} MB';
+    } else if (fileSize >= 1024) {
+      // Для средних файлов используем KB для обоих
+      final receivedKB = receivedBytes / 1024;
+      final totalKB = fileSize / 1024;
+      return '${receivedKB.toStringAsFixed(2)} / ${totalKB.toStringAsFixed(2)} KB';
+    } else {
+      // Для маленьких файлов используем байты
+      return '$receivedBytes / $fileSize B';
+    }
   }
 
   String _formatBytes(int bytes) {

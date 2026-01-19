@@ -61,7 +61,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
         // Для iOS также может потребоваться доступ к медиабиблиотеке
         final mediaLibraryStatus = await Permission.mediaLibrary.status;
         if (!mediaLibraryStatus.isGranted) {
-          // await Permission.mediaLibrary.request();
+          // await Permission.mediaLibrary.request(); // TODO: CHECK
         }
 
         _hasStoragePermission = photosStatus.isGranted;
