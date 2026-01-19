@@ -204,9 +204,9 @@ class _ServerScreenState extends State<ServerScreen> {
     // Показываем только если есть активные передачи
     final hasActiveTransfers = photoProgress > 0 || videoProgress > 0;
 
-    if (!hasActiveTransfers) {
-      return SizedBox.shrink();
-    }
+    // if (!hasActiveTransfers) {
+    //   return SizedBox.shrink();
+    // }
 
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 8),

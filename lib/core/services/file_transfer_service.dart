@@ -510,7 +510,7 @@ class FileTransferService extends ChangeNotifier {
       if (port == PORT) {
         print('🔄 Пробую порт 8081...');
         await Future.delayed(Duration(seconds: 1));
-        await connectToServer(serverIp, port: 8081);
+        await connectToServer(serverIp, port: 8080);
       }
     }
   }
@@ -924,7 +924,8 @@ class FileTransferService extends ChangeNotifier {
         transfer.onProgress(clampedGroupProgress);
 
         // ОТПРАВЛЯЕМ ПРОГРЕСС НА СЕРВЕР КАЖДЫЕ 5% ИЛИ ПРИ ЗНАЧИТЕЛЬНЫХ ИЗМЕНЕНИЯХ
-        if (chunkIndex % 5 == 0 || fileSentBytes == currentFileSize) {
+        // if (chunkIndex % 5 == 0 || fileSentBytes == currentFileSize) {
+        if (chunkIndex % 20 == 0 || fileSentBytes == currentFileSize) {
           _sendProgressUpdate(
             groupTransferId,
             clampedGroupProgress,
@@ -1620,32 +1621,77 @@ class FileTransferService extends ChangeNotifier {
   ) async {
     try {
       print('💾 Сохранение в галерею: ${file.path}');
+      print('📱 Платформа: ${Platform.operatingSystem}');
+      print('📄 MIME тип: $mimeType');
+      print('📝 Имя файла: $originalName');
 
       bool isSaved = false;
+      String? savedPath;
 
       if (mimeType.startsWith('image/')) {
         try {
           final bytes = await file.readAsBytes();
+          print('🖼️ Размер изображения: ${bytes.length} байт');
 
-          final result = await ImageGallerySaverPlus.saveImage(
-            bytes,
-            name: originalName,
-            quality: 100,
-            isReturnImagePathOfIOS: true,
-          );
+          if (Platform.isIOS) {
+            // Для iOS используем правильный путь
+            final result = await ImageGallerySaverPlus.saveImage(
+              bytes,
+              name: originalName,
+              quality: 100,
+              isReturnImagePathOfIOS: true,
+            );
 
-          print('📱 Результат сохранения: $result');
+            print('📱 Результат сохранения на iOS: $result');
 
-          if (result is Map) {
-            final success = result['isSuccess'] as bool? ?? false;
-            if (success) {
-              isSaved = true;
-              print('✅ Файл сохранен в галерею iOS: $originalName');
+            if (result is Map) {
+              final success = result['isSuccess'] as bool? ?? false;
+              final filePath = result['filePath'] as String?;
+              if (success) {
+                isSaved = true;
+                savedPath = filePath;
+                print('✅ Изображение сохранено в галерею iOS: $originalName');
+                if (filePath != null) {
+                  print('📁 Путь: $filePath');
+                }
+              } else {
+                print('❌ Ошибка при сохранении изображения на iOS');
+              }
+            } else if (result is bool) {
+              isSaved = result;
+              if (isSaved) {
+                print(
+                  '✅ Изображение сохранено в галерею Android: $originalName',
+                );
+              } else {
+                print('❌ Ошибка при сохранении изображения на Android');
+              }
             }
-          } else if (result is bool) {
-            isSaved = result;
-            if (isSaved) {
-              print('✅ Файл сохранен в галерею Android: $originalName');
+          } else {
+            // Для Android
+            final result = await ImageGallerySaverPlus.saveImage(
+              bytes,
+              name: originalName,
+              quality: 100,
+            );
+
+            print('📱 Результат сохранения на Android: $result');
+
+            if (result is Map) {
+              final success = result['isSuccess'] as bool? ?? false;
+              if (success) {
+                isSaved = true;
+                print(
+                  '✅ Изображение сохранено в галерею Android: $originalName',
+                );
+              }
+            } else if (result is bool) {
+              isSaved = result;
+              if (isSaved) {
+                print(
+                  '✅ Изображение сохранено в галерею Android: $originalName',
+                );
+              }
             }
           }
         } catch (e) {
@@ -1653,19 +1699,47 @@ class FileTransferService extends ChangeNotifier {
         }
       } else if (mimeType.startsWith('video/')) {
         try {
-          final result = await ImageGallerySaverPlus.saveFile(
-            file.path,
-            name: originalName,
-            isReturnPathOfIOS: true,
-          );
+          print('🎥 Размер видео файла: ${await file.length()} байт');
 
-          print('📱 Результат сохранения видео: $result');
+          if (Platform.isIOS) {
+            // Для iOS видео
+            final result = await ImageGallerySaverPlus.saveFile(
+              file.path,
+              name: originalName,
+              isReturnPathOfIOS: true,
+            );
 
-          if (result is Map) {
-            final success = result['isSuccess'] as bool? ?? false;
-            if (success) {
-              isSaved = true;
-              print('✅ Видео сохранено в галерею: $originalName');
+            print('📱 Результат сохранения видео на iOS: $result');
+
+            if (result is Map) {
+              final success = result['isSuccess'] as bool? ?? false;
+              final filePath = result['filePath'] as String?;
+              if (success) {
+                isSaved = true;
+                savedPath = filePath;
+                print('✅ Видео сохранено в галерею iOS: $originalName');
+                if (filePath != null) {
+                  print('📁 Путь: $filePath');
+                }
+              } else {
+                print('❌ Ошибка при сохранении видео на iOS');
+              }
+            }
+          } else {
+            // Для Android видео
+            final result = await ImageGallerySaverPlus.saveFile(
+              file.path,
+              name: originalName,
+            );
+
+            print('📱 Результат сохранения видео на Android: $result');
+
+            if (result is Map) {
+              final success = result['isSuccess'] as bool? ?? false;
+              if (success) {
+                isSaved = true;
+                print('✅ Видео сохранено в галерею Android: $originalName');
+              }
             }
           }
         } catch (e) {
@@ -1675,23 +1749,84 @@ class FileTransferService extends ChangeNotifier {
 
       if (isSaved) {
         _status = 'Файл сохранен в галерею';
+        final length = await file.length();
+
+        // Обновляем путь в ReceivedMedia, если файл был сохранен в галерею
+        if (savedPath != null && savedPath.isNotEmpty) {
+          final media = _receivedMedia.firstWhere(
+            (m) => m.fileName == originalName,
+            orElse: () => ReceivedMedia(
+              file: file,
+              fileName: originalName,
+              fileSize: length,
+              mimeType: mimeType,
+              receivedAt: DateTime.now(),
+            ),
+          );
+
+          if (media.file.path != savedPath) {
+            print('🔄 Обновляю путь к файлу: $savedPath');
+            // Обновляем файл на новый путь
+            media.file = File(savedPath);
+          }
+        }
+
         // Удаляем временный файл после успешного сохранения
         try {
           if (await file.exists()) {
             await file.delete();
-            print('🗑️ Временный файл удален');
+            print('🗑️ Временный файл удален: ${file.path}');
           }
         } catch (e) {
           print('⚠️ Ошибка удаления временного файла: $e');
         }
       } else {
-        print('⚠️ Не удалось сохранить файл в галерею, сохраняю локально');
+        print('⚠️ Не удалось сохранить файл в галерею, оставляю локально');
+        _status = 'Файл сохранен локально';
+
+        // Перемещаем файл из временной директории в постоянную
+        try {
+          final permanentDir = Directory(
+            path.join(_appDocumentsDirectory!.path, _receivedFilesDir),
+          );
+
+          if (!await permanentDir.exists()) {
+            await permanentDir.create(recursive: true);
+          }
+
+          final permanentPath = path.join(permanentDir.path, originalName);
+
+          await file.copy(permanentPath);
+          await file.delete();
+
+          print('📁 Файл перемещен в постоянную директорию: $permanentPath');
+
+          final fileSize = await File(permanentPath).length();
+
+          // Обновляем путь в ReceivedMedia
+          final media = _receivedMedia.firstWhere(
+            (m) => m.fileName == originalName,
+            orElse: () => ReceivedMedia(
+              file: File(permanentPath),
+              fileName: originalName,
+              fileSize: fileSize,
+              mimeType: mimeType,
+              receivedAt: DateTime.now(),
+            ),
+          );
+
+          media.file = File(permanentPath);
+        } catch (e) {
+          print('⚠️ Ошибка перемещения файла: $e');
+        }
       }
 
       notifyListeners();
     } catch (e, stackTrace) {
       print('❌ Критическая ошибка сохранения в галерею: $e');
       print('Stack: $stackTrace');
+      _status = 'Ошибка сохранения: $e';
+      notifyListeners();
     }
   }
 
@@ -1872,7 +2007,7 @@ class FileReceiver {
 }
 
 class ReceivedMedia {
-  final File file;
+  File file;
   final String fileName;
   final int fileSize;
   final String mimeType;
