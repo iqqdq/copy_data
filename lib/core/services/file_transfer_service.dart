@@ -218,12 +218,10 @@ class FileTransferService extends ChangeNotifier {
           onDone: () {
             print('❌ Клиент отключился');
             _connectedClients.remove(webSocket);
-            _cleanupDisconnectedClient(webSocket);
           },
           onError: (error) {
             print('⚠️ Ошибка от клиента: $error');
             _connectedClients.remove(webSocket);
-            _cleanupDisconnectedClient(webSocket);
           },
         );
       } else {
@@ -233,20 +231,6 @@ class FileTransferService extends ChangeNotifier {
       }
     } catch (e) {
       print('❌ Ошибка обработки подключения: $e');
-    }
-  }
-
-  void _cleanupDisconnectedClient(WebSocket socket) {
-    // Удаляем все активные передачи для этого клиента
-    final transfersToRemove = <String>[];
-    _activeTransfers.forEach((key, transfer) {
-      if (transfer.socket == socket) {
-        transfersToRemove.add(key);
-      }
-    });
-
-    for (final key in transfersToRemove) {
-      _activeTransfers.remove(key);
     }
   }
 
@@ -262,7 +246,7 @@ class FileTransferService extends ChangeNotifier {
           _handleClientHandshake(socket, data);
           break;
         case 'metadata_ack':
-          _handleMetadataAck(socket, data);
+          print('✅ Клиент готов принимать файл');
           break;
         case 'chunk_ack':
           _handleChunkAckFromClient(socket, data);
@@ -298,11 +282,11 @@ class FileTransferService extends ChangeNotifier {
           '(${_formatBytes(receivedBytes)} / ${_formatBytes(totalBytes)})',
         );
 
-        // Обновляем прогресс на сервере
+        // Обновляем прогресс на сервере для отображения прогресса на клиенте
         final transfer = _activeTransfers[transferId];
         if (transfer != null) {
-          // Обновляем полученные байты на стороне клиента (для отображения на сервере)
-          transfer.receivedBytesClient = receivedBytes;
+          // Обновляем прогресс на стороне клиента (для отображения на сервере)
+          transfer.receivedBytes = receivedBytes;
           transfer.onProgress(progress);
           notifyListeners();
         }
@@ -332,32 +316,6 @@ class FileTransferService extends ChangeNotifier {
     );
   }
 
-  void _handleMetadataAck(WebSocket socket, Map<String, dynamic> data) {
-    final transferId = data['transferId'] as String?;
-
-    if (transferId != null) {
-      print('✅ Клиент готов принимать файл: $transferId');
-
-      // Находим родительскую групповую передачу
-      String? groupTransferId;
-      if (transferId.contains('_')) {
-        final parts = transferId.split('_');
-        final lastPart = parts.last;
-        if (int.tryParse(lastPart) != null) {
-          groupTransferId = parts.sublist(0, parts.length - 1).join('_');
-        }
-      }
-
-      if (groupTransferId != null) {
-        final transfer = _activeTransfers[groupTransferId];
-        if (transfer != null) {
-          // Можно начать отправку следующего файла в группе
-          print('📊 Подтверждение для группы: $groupTransferId');
-        }
-      }
-    }
-  }
-
   void _handleChunkAckFromClient(WebSocket socket, Map<String, dynamic> data) {
     final transferId = data['transferId'] as String?;
     final receivedBytes = data['receivedBytes'] as int?;
@@ -366,35 +324,6 @@ class FileTransferService extends ChangeNotifier {
       print(
         '✅ Подтверждение чанка от клиента: $transferId - ${_formatBytes(receivedBytes)}',
       );
-
-      // Находим родительскую групповую передачу
-      String? groupTransferId;
-      if (transferId.contains('_')) {
-        final parts = transferId.split('_');
-        final lastPart = parts.last;
-        if (int.tryParse(lastPart) != null) {
-          groupTransferId = parts.sublist(0, parts.length - 1).join('_');
-        }
-      }
-
-      if (groupTransferId != null) {
-        final transfer = _activeTransfers[groupTransferId];
-        if (transfer != null) {
-          // Обновляем отправленные байты на сервере
-          transfer.receivedBytes = receivedBytes;
-
-          // Отправляем обновление прогресса клиенту
-          _sendProgressUpdateToClient(
-            socket,
-            groupTransferId,
-            transfer.progress,
-            transfer.receivedBytes,
-            transfer.fileSize,
-          );
-
-          notifyListeners();
-        }
-      }
     }
   }
 
@@ -407,44 +336,6 @@ class FileTransferService extends ChangeNotifier {
 
     if (transferId != null && fileName != null) {
       print('🎉 Клиент подтвердил получение файла: $fileName');
-
-      // Находим родительскую групповую передачу
-      String? groupTransferId;
-      if (transferId.contains('_')) {
-        final parts = transferId.split('_');
-        final lastPart = parts.last;
-        if (int.tryParse(lastPart) != null) {
-          groupTransferId = parts.sublist(0, parts.length - 1).join('_');
-        }
-      }
-
-      if (groupTransferId != null) {
-        final transfer = _activeTransfers[groupTransferId];
-        if (transfer != null) {
-          transfer.completedFiles++;
-
-          // Отправляем прогресс 100% для этого файла
-          _sendProgressUpdateToClient(
-            socket,
-            groupTransferId,
-            transfer.progress,
-            transfer.receivedBytes,
-            transfer.fileSize,
-          );
-
-          if (transfer.completedFiles >= transfer.totalFiles) {
-            print('🎉 Вся группа файлов отправлена: ${transfer.fileName}');
-
-            // Завершаем передачу через 3 секунды
-            Future.delayed(Duration(seconds: 3), () {
-              _activeTransfers.remove(groupTransferId);
-              notifyListeners();
-            });
-          }
-
-          notifyListeners();
-        }
-      }
     }
   }
 
@@ -501,7 +392,7 @@ class FileTransferService extends ChangeNotifier {
     _activeTransfers.clear();
     notifyListeners();
 
-    // Создаем отдельные передачи для фото и видео
+    // Создаем отдельные передачи для фото и видео - ВОССТАНАВЛИВАЕМ ОРИГИНАЛЬНУЮ ЛОГИКУ
     final photoFiles = files.where((file) {
       final mimeType = lookupMimeType(file.path) ?? '';
       return mimeType.startsWith('image/');
@@ -513,13 +404,126 @@ class FileTransferService extends ChangeNotifier {
     }).toList();
 
     // Создаем передачи для фото
+    String? photoTransferId;
     if (photoFiles.isNotEmpty) {
-      await _sendFileGroupFromServer(photoFiles, client, isVideoGroup: false);
+      photoTransferId = 'photos_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Рассчитываем общий размер фото
+      int totalPhotoSize = 0;
+      for (final file in photoFiles) {
+        totalPhotoSize += await file.length();
+      }
+
+      _activeTransfers[photoTransferId] = FileTransfer(
+        transferId: photoTransferId,
+        fileName: '${photoFiles.length} фото',
+        fileSize: totalPhotoSize,
+        fileType: 'image/mixed',
+        file: photoFiles.first,
+        targetPath: '',
+        onProgress: (progress) {
+          notifyListeners();
+        },
+        onComplete: (file) {
+          print('✅ Все фото отправлены с сервера');
+          Future.delayed(Duration(seconds: 3), () {
+            _activeTransfers.remove(photoTransferId);
+            notifyListeners();
+          });
+        },
+        onError: (error) {
+          print('❌ Ошибка отправки фото: $error');
+          _activeTransfers.remove(photoTransferId);
+          notifyListeners();
+        },
+        sendMessage: (message) {
+          try {
+            client.add(jsonEncode(message));
+          } catch (e) {
+            print('❌ Ошибка отправки сообщения клиенту: $e');
+          }
+        },
+        totalFiles: photoFiles.length,
+        completedFiles: 0,
+      );
+
+      print(
+        '📸 Создана групповая передача фото: ${photoFiles.length} файлов, '
+        'общий размер: ${(totalPhotoSize / (1024 * 1024)).toStringAsFixed(2)} MB',
+      );
     }
 
     // Создаем передачи для видео
+    String? videoTransferId;
     if (videoFiles.isNotEmpty) {
-      await _sendFileGroupFromServer(videoFiles, client, isVideoGroup: true);
+      videoTransferId = 'videos_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Рассчитываем общий размер видео
+      int totalVideoSize = 0;
+      for (final file in videoFiles) {
+        totalVideoSize += await file.length();
+      }
+
+      _activeTransfers[videoTransferId] = FileTransfer(
+        transferId: videoTransferId,
+        fileName: '${videoFiles.length} видео',
+        fileSize: totalVideoSize,
+        fileType: 'video/mixed',
+        file: videoFiles.first,
+        targetPath: '',
+        onProgress: (progress) {
+          notifyListeners();
+        },
+        onComplete: (file) {
+          print('✅ Все видео отправлены с сервера');
+          Future.delayed(Duration(seconds: 3), () {
+            _activeTransfers.remove(videoTransferId);
+            notifyListeners();
+          });
+        },
+        onError: (error) {
+          print('❌ Ошибка отправки видео: $error');
+          _activeTransfers.remove(videoTransferId);
+          notifyListeners();
+        },
+        sendMessage: (message) {
+          try {
+            client.add(jsonEncode(message));
+          } catch (e) {
+            print('❌ Ошибка отправки сообщения клиенту: $e');
+          }
+        },
+        totalFiles: videoFiles.length,
+        completedFiles: 0,
+      );
+
+      print(
+        '🎥 Создана групповая передача видео: ${videoFiles.length} файлов, '
+        'общий размер: ${(totalVideoSize / (1024 * 1024)).toStringAsFixed(2)} MB',
+      );
+    }
+
+    notifyListeners();
+
+    // Отправляем файлы группами - ВОССТАНАВЛИВАЕМ ОРИГИНАЛЬНУЮ ЛОГИКУ
+    if (photoFiles.isNotEmpty) {
+      print('🚀 Начинаю отправку ${photoFiles.length} фото с сервера...');
+      await _sendFileGroupFromServer(
+        photoFiles,
+        client,
+        photoTransferId!,
+        isVideoGroup: false,
+      );
+    }
+
+    if (videoFiles.isNotEmpty) {
+      print('🚀 Начинаю отправку ${videoFiles.length} видео с сервера...');
+      await _sendFileGroupFromServer(
+        videoFiles,
+        client,
+        videoTransferId!,
+        isVideoGroup: true,
+      );
     }
 
     print('🎯 Все групповые передачи запущены с сервера');
@@ -527,63 +531,28 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> _sendFileGroupFromServer(
     List<File> files,
-    WebSocket socket, {
+    WebSocket socket,
+    String groupTransferId, {
     required bool isVideoGroup,
   }) async {
-    final groupTransferId =
-        'server_${isVideoGroup ? 'videos' : 'photos'}_${DateTime.now().millisecondsSinceEpoch}';
-
-    // Рассчитываем общий размер
-    int totalGroupSize = 0;
-    for (final file in files) {
-      totalGroupSize += await file.length();
+    final transfer = _activeTransfers[groupTransferId];
+    if (transfer == null) {
+      print('⚠️ Групповая передача $groupTransferId не найдена');
+      return;
     }
 
+    int totalBytesSent = 0;
+    final int totalGroupSize = transfer.fileSize;
+
     print(
-      '📊 Группа ${isVideoGroup ? 'видео' : 'фото'}: ${files.length} файлов, '
+      '📊 Начинаю отправку группы с сервера: ${files.length} файлов, '
       'общий размер: ${(totalGroupSize / (1024 * 1024)).toStringAsFixed(2)} MB',
     );
 
-    // Создаем передачу на сервере
-    _activeTransfers[groupTransferId] = FileTransfer(
-      transferId: groupTransferId,
-      fileName: '${files.length} ${isVideoGroup ? 'видео' : 'фото'}',
-      fileSize: totalGroupSize,
-      fileType: isVideoGroup ? 'video/mixed' : 'image/mixed',
-      file: files.first,
-      targetPath: '',
-      onProgress: (progress) {
-        notifyListeners();
-      },
-      onComplete: (file) {
-        print('✅ Все файлы отправлены с сервера');
-        Future.delayed(Duration(seconds: 3), () {
-          _activeTransfers.remove(groupTransferId);
-          notifyListeners();
-        });
-      },
-      onError: (error) {
-        print('❌ Ошибка отправки с сервера: $error');
-        _activeTransfers.remove(groupTransferId);
-        notifyListeners();
-      },
-      sendMessage: (message) {
-        try {
-          socket.add(jsonEncode(message));
-        } catch (e) {
-          print('❌ Ошибка отправки сообщения клиенту: $e');
-        }
-      },
-      totalFiles: files.length,
-      completedFiles: 0,
-      socket: socket,
-    );
-
-    notifyListeners();
-
-    int totalBytesSent = 0;
-
-    // Отправляем начальный прогресс (0%)
+    // Начальный прогресс
+    transfer.receivedBytes = 0;
+    transfer.onProgress(0.0);
+    // Отправляем начальный прогресс клиенту
     _sendProgressUpdateToClient(
       socket,
       groupTransferId,
@@ -598,20 +567,20 @@ class FileTransferService extends ChangeNotifier {
       final mimeType = lookupMimeType(file.path) ?? 'application/octet-stream';
       final fileSize = await file.length();
 
+      File fileToSend = file;
+      String fileType = mimeType;
+
       print(
-        '📤 Сервер отправляет ${isVideoGroup ? 'видео' : 'фото'} ${i + 1}/${files.length}: $fileName '
+        '📦 ${isVideoGroup ? 'Видео' : 'Фото'} ${i + 1}/${files.length}: $fileName '
         '(${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB)',
       );
 
-      // Точная доля этого файла в общей группе
+      // Точная доля этого файла в общей группе - ОРИГИНАЛЬНАЯ ЛОГИКА
       final fileShare = fileSize.toDouble() / totalGroupSize.toDouble();
 
-      // Прогресс до начала этого файла
+      // Прогресс до начала этого файла (в процентах)
       final progressBeforeThisFile =
           (totalBytesSent.toDouble() / totalGroupSize.toDouble()) * 100.0;
-
-      File fileToSend = file;
-      String fileType = mimeType;
 
       // Для видео: конвертация (40%) + передача (60%)
       // Для фото: только передача (100%)
@@ -621,7 +590,28 @@ class FileTransferService extends ChangeNotifier {
       if (isVideoGroup && mimeType.startsWith('video/') && _isMovFile(file)) {
         print('🎬 Конвертация .mov в .mp4 на сервере...');
 
-        // Устанавливаем прогресс начала конвертации
+        // ОТПРАВЛЯЕМ МЕТАДАННЫЕ СРАЗУ
+        final fileTransferId = '${groupTransferId}_$i';
+        final currentFileSize = fileSize; // Размер оригинального файла
+
+        final metadata = {
+          'type': 'file_metadata',
+          'transferId': fileTransferId,
+          'fileName': fileName,
+          'fileSize': currentFileSize,
+          'fileType': mimeType, // Оригинальный тип (video/mov)
+          'timestamp': DateTime.now().toIso8601String(),
+          'isConverting': true, // Можно добавить флаг
+        };
+
+        socket.add(jsonEncode(metadata)); // <-- ТЕПЕРЬ ДО конвертации!
+
+        // Ждем немного чтобы клиент успел обработать метаданные
+        await Future.delayed(Duration(milliseconds: 100));
+
+        // Прогресс на начало конвертации этого файла
+        transfer.onProgress(progressBeforeThisFile);
+        // Отправляем прогресс конвертации клиенту
         _sendProgressUpdateToClient(
           socket,
           groupTransferId,
@@ -633,39 +623,36 @@ class FileTransferService extends ChangeNotifier {
         final convertedFile = await _convertMovToMp4(file, (
           conversionProgress,
         ) {
-          // Доля конвертации в общем прогрессе
+          // conversionProgress от 0 до 100
+
+          // Доля конвертации в общем прогрессе (от 0 до fileShare * 0.4)
           final conversionShareInGroup =
               (conversionProgress / 100.0) *
               conversionWeight *
               fileShare /
               100.0;
 
-          // Общий прогресс группы
+          // Общий прогресс группы = прогресс до этого файла + прогресс конвертации
           final groupProgress =
               progressBeforeThisFile + (conversionShareInGroup * 100.0);
 
-          // Ограничиваем прогресс
+          // Ограничиваем прогресс, чтобы не превышал 100%
           final clampedProgress = groupProgress.clamp(0.0, 100.0);
 
-          // Обновляем передачу
-          final transfer = _activeTransfers[groupTransferId];
-          if (transfer != null) {
-            transfer.receivedBytes = (clampedProgress / 100.0 * totalGroupSize)
-                .toInt();
-            transfer.onProgress(clampedProgress);
-
-            // Отправляем прогресс клиенту
-            _sendProgressUpdateToClient(
-              socket,
-              groupTransferId,
-              clampedProgress,
-              transfer.receivedBytes,
-              totalGroupSize,
-            );
-          }
+          transfer.receivedBytes = (clampedProgress / 100.0 * totalGroupSize)
+              .toInt();
+          transfer.onProgress(clampedProgress);
+          // Отправляем прогресс конвертации клиенту
+          _sendProgressUpdateToClient(
+            socket,
+            groupTransferId,
+            clampedProgress,
+            transfer.receivedBytes,
+            totalGroupSize,
+          );
 
           print(
-            '🔄 Прогресс конвертации видео ${i + 1}: ${conversionProgress.toStringAsFixed(1)}%, '
+            '🔄 Прогресс видео ${i + 1}: конвертация ${conversionProgress.toStringAsFixed(1)}%, '
             'общий прогресс: ${clampedProgress.toStringAsFixed(1)}%',
           );
         });
@@ -675,7 +662,7 @@ class FileTransferService extends ChangeNotifier {
           fileType = 'video/mp4';
         }
       } else if (isVideoGroup) {
-        // Для видео без конвертации
+        // Для видео без конвертации сразу отправляем прогресс начала файла
         _sendProgressUpdateToClient(
           socket,
           groupTransferId,
@@ -685,7 +672,7 @@ class FileTransferService extends ChangeNotifier {
         );
       }
 
-      // После конвертации устанавливаем прогресс на начало передачи
+      // После конвертации (или сразу для фото) устанавливаем прогресс на начало передачи
       final progressBeforeTransfer =
           progressBeforeThisFile + (conversionWeight * fileShare);
       final clampedProgressBeforeTransfer = progressBeforeTransfer.clamp(
@@ -693,23 +680,23 @@ class FileTransferService extends ChangeNotifier {
         100.0,
       );
 
-      // Обновляем передачу
-      final transfer = _activeTransfers[groupTransferId];
-      if (transfer != null) {
-        transfer.receivedBytes =
-            (clampedProgressBeforeTransfer / 100.0 * totalGroupSize).toInt();
-        transfer.onProgress(clampedProgressBeforeTransfer);
+      transfer.receivedBytes =
+          (clampedProgressBeforeTransfer / 100.0 * totalGroupSize).toInt();
+      transfer.onProgress(clampedProgressBeforeTransfer);
+      // Отправляем прогресс начала передачи клиенту
+      _sendProgressUpdateToClient(
+        socket,
+        groupTransferId,
+        clampedProgressBeforeTransfer,
+        transfer.receivedBytes,
+        totalGroupSize,
+      );
 
-        _sendProgressUpdateToClient(
-          socket,
-          groupTransferId,
-          clampedProgressBeforeTransfer,
-          transfer.receivedBytes,
-          totalGroupSize,
-        );
-      }
+      // Отправка текущего файла
+      print(
+        '📤 Отправка ${isVideoGroup ? 'видео' : 'фото'} ${i + 1}/${files.length} с сервера',
+      );
 
-      // Отправляем метаданные файла
       final fileTransferId = '${groupTransferId}_$i';
       final currentFileSize = await fileToSend.length();
 
@@ -723,9 +710,8 @@ class FileTransferService extends ChangeNotifier {
       };
 
       socket.add(jsonEncode(metadata));
-      await Future.delayed(Duration(milliseconds: 300));
+      await Future.delayed(Duration(milliseconds: 50));
 
-      // Отправляем файл по чанкам
       final stream = fileToSend.openRead();
       var chunkIndex = 0;
       var fileSentBytes = 0;
@@ -744,7 +730,7 @@ class FileTransferService extends ChangeNotifier {
         fileSentBytes += chunk.length;
         chunkIndex++;
 
-        // Рассчитываем прогресс передачи для этого файла
+        // Рассчитываем прогресс передачи для этого файла (0-1)
         final fileTransferProgress =
             fileSentBytes.toDouble() / currentFileSize.toDouble();
 
@@ -752,29 +738,26 @@ class FileTransferService extends ChangeNotifier {
         final transferShareInGroup =
             fileTransferProgress * transferWeight * fileShare / 100.0;
 
-        // Общий прогресс группы
+        // Общий прогресс группы = прогресс до передачи этого файла + прогресс передачи
         final groupProgress =
             progressBeforeTransfer + (transferShareInGroup * 100.0);
 
         // Ограничиваем прогресс
         final clampedGroupProgress = groupProgress.clamp(0.0, 100.0);
 
-        // Обновляем передачу
-        if (transfer != null) {
-          totalBytesSent += chunk.length;
-          transfer.receivedBytes = totalBytesSent;
-          transfer.onProgress(clampedGroupProgress);
+        transfer.receivedBytes = (clampedGroupProgress / 100.0 * totalGroupSize)
+            .toInt();
+        transfer.onProgress(clampedGroupProgress);
 
-          // Отправляем прогресс клиенту каждые 20% или при значительных изменениях
-          if (chunkIndex % 20 == 0 || fileSentBytes == currentFileSize) {
-            _sendProgressUpdateToClient(
-              socket,
-              groupTransferId,
-              clampedGroupProgress,
-              totalBytesSent,
-              totalGroupSize,
-            );
-          }
+        // Отправляем прогресс клиенту каждые 2% или при значительных изменениях
+        if (chunkIndex % 2 == 0 || fileSentBytes == currentFileSize) {
+          _sendProgressUpdateToClient(
+            socket,
+            groupTransferId,
+            clampedGroupProgress,
+            transfer.receivedBytes,
+            totalGroupSize,
+          );
         }
 
         await Future.delayed(Duration(milliseconds: 10));
@@ -793,31 +776,34 @@ class FileTransferService extends ChangeNotifier {
       socket.add(jsonEncode(finalMessage));
 
       // Обновляем общий счетчик отправленных байт
-      totalBytesSent = min(totalBytesSent + fileSize, totalGroupSize);
+      totalBytesSent += fileSize;
 
       // Устанавливаем ТОЧНЫЙ прогресс после завершения файла
+      // Для видео: конвертация (40%) + передача (60%) = 100% от доли файла
+      // Для фото: передача (100%) = 100% от доли файла
       final exactGroupProgress =
           (totalBytesSent.toDouble() / totalGroupSize.toDouble()) * 100.0;
+      // Ограничиваем 100%
       final clampedExactProgress = exactGroupProgress.clamp(0.0, 100.0);
 
-      if (transfer != null) {
-        transfer.receivedBytes = totalBytesSent;
-        transfer.onProgress(clampedExactProgress);
-        transfer.completedFiles++;
+      transfer.receivedBytes = (clampedExactProgress / 100.0 * totalGroupSize)
+          .toInt();
+      transfer.onProgress(clampedExactProgress);
+      // Отправляем финальный прогресс для этого файла клиенту
+      _sendProgressUpdateToClient(
+        socket,
+        groupTransferId,
+        clampedExactProgress,
+        transfer.receivedBytes,
+        totalGroupSize,
+      );
 
-        // Отправляем финальный прогресс для этого файла
-        _sendProgressUpdateToClient(
-          socket,
-          groupTransferId,
-          clampedExactProgress,
-          totalBytesSent,
-          totalGroupSize,
-        );
-      }
+      // Увеличиваем счетчик завершенных файлов
+      transfer.completedFiles++;
 
       print(
         '✅ ${isVideoGroup ? 'Видео' : 'Фото'} ${i + 1}/${files.length} отправлено с сервера '
-        '(${transfer?.completedFiles}/${transfer?.totalFiles} файлов, '
+        '(${transfer.completedFiles}/${transfer.totalFiles} файлов, '
         '${clampedExactProgress.toStringAsFixed(1)}%)',
       );
 
@@ -830,28 +816,23 @@ class FileTransferService extends ChangeNotifier {
           print('⚠️ Не удалось удалить временный файл: $e');
         }
       }
-
-      await Future.delayed(Duration(milliseconds: 500));
     }
 
     // Завершаем прогресс группы - ТОЧНО 100%
-    final transfer = _activeTransfers[groupTransferId];
-    if (transfer != null) {
-      transfer.receivedBytes = totalGroupSize;
-      transfer.onProgress(100.0);
-      _sendProgressUpdateToClient(
-        socket,
-        groupTransferId,
-        100.0,
-        totalGroupSize,
-        totalGroupSize,
-      );
-      transfer.onComplete(files.first);
-    }
+    transfer.receivedBytes = totalGroupSize;
+    transfer.onProgress(100.0);
+    _sendProgressUpdateToClient(
+      socket,
+      groupTransferId,
+      100.0,
+      totalGroupSize,
+      totalGroupSize,
+    );
+    transfer.onComplete(files.first);
 
     print(
       '🎉 Все ${files.length} ${isVideoGroup ? 'видео' : 'фото'} отправлены с сервера! '
-      '(100%, ${transfer?.completedFiles}/${transfer?.totalFiles} файлов)',
+      '(100%, ${transfer.completedFiles}/${transfer.totalFiles} файлов)',
     );
   }
 
@@ -990,18 +971,8 @@ class FileTransferService extends ChangeNotifier {
         '📥 Клиент получает метаданные от сервера: $fileName ($fileSize байт)',
       );
 
-      // Проверяем, поддерживаем ли мы этот тип файла
-      if (!fileType.startsWith('image/') && !fileType.startsWith('video/')) {
-        print('⚠️ Неподдерживаемый тип файла: $fileType');
-        _sendClientMessage({
-          'type': 'error',
-          'transferId': transferId,
-          'message': 'Поддерживаются только фото и видео',
-        });
-        return;
-      }
-
       // Определяем, является ли это групповой передачей
+      // Если transferId содержит "_" и последняя часть - число, это файл в группе
       final isGroupFile =
           transferId.contains('_') && RegExp(r'_\d+$').hasMatch(transferId);
       String groupTransferId = transferId;
@@ -1036,8 +1007,7 @@ class FileTransferService extends ChangeNotifier {
         );
       }
 
-      late final FileReceiver receiver;
-      receiver = FileReceiver(
+      final receiver = FileReceiver(
         transferId: transferId,
         fileName: fileName,
         fileSize: fileSize,
@@ -1048,16 +1018,6 @@ class FileTransferService extends ChangeNotifier {
           print(
             '📥 Прогресс приема $fileName: ${progress.toStringAsFixed(1)}%',
           );
-
-          // Отправляем прогресс серверу
-          _sendClientMessage({
-            'type': 'progress_update',
-            'transferId': transferId,
-            'progress': progress,
-            'receivedBytes': receiver.receivedBytes,
-            'totalBytes': fileSize,
-            'timestamp': DateTime.now().toIso8601String(),
-          });
         },
         onComplete: (file) async {
           await _saveToGallery(file, fileType, fileName);
@@ -1194,6 +1154,39 @@ class FileTransferService extends ChangeNotifier {
     try {
       final bytes = base64Decode(chunkData);
       await receiver.writeChunk(bytes);
+
+      // Находим соответствующую передачу для обновления прогресса
+      FileTransfer? transferToUpdate;
+
+      // Прямой поиск
+      if (_activeTransfers.containsKey(transferId)) {
+        transferToUpdate = _activeTransfers[transferId];
+      }
+      // Поиск групповой передачи для файла в группе
+      else if (transferId.contains('_')) {
+        final parts = transferId.split('_');
+        final lastPart = parts.last;
+        if (int.tryParse(lastPart) != null) {
+          final groupId = parts.sublist(0, parts.length - 1).join('_');
+          transferToUpdate = _activeTransfers[groupId];
+        }
+      }
+
+      if (transferToUpdate != null) {
+        transferToUpdate.receivedBytes += bytes.length;
+
+        // Отправляем прогресс серверу
+        _sendClientMessage({
+          'type': 'progress_update',
+          'transferId': transferToUpdate.transferId,
+          'progress': transferToUpdate.progress,
+          'receivedBytes': transferToUpdate.receivedBytes,
+          'totalBytes': transferToUpdate.fileSize,
+          'timestamp': DateTime.now().toIso8601String(),
+        });
+
+        notifyListeners();
+      }
 
       // Отправляем подтверждение серверу
       _sendClientMessage({
@@ -1390,10 +1383,10 @@ class FileTransferService extends ChangeNotifier {
       // Храним последний отправленный прогресс
       double lastSentProgress = -1.0;
 
-      // ВКЛЮЧАЕМ СЛУШАТЕЛЬ ПРОГРЕССА ПЕРЕД НАЧАЛОМ
+      // Включаем слушатель прогресса перед началом
       _setupFfmpegProgressListener((progress) {
         // progress от 0 до 100
-        // ОТПРАВЛЯЕМ ПРОГРЕСС ТОЛЬКО ПРИ ЗНАЧИТЕЛЬНОМ ИЗМЕНЕНИИ (минимум 1%)
+        // Отправляем прогресс только при значительном изменении (минимум 1%)
         if (progress - lastSentProgress >= 1.0 || progress >= 100.0) {
           onProgress(progress);
           lastSentProgress = progress;
@@ -1405,7 +1398,7 @@ class FileTransferService extends ChangeNotifier {
         try {
           final returnCode = await session.getReturnCode();
 
-          // ОТКЛЮЧАЕМ СЛУШАТЕЛЬ ПОСЛЕ ЗАВЕРШЕНИЯ
+          // Отключаем слушатель после завершения
           _disableFfmpegProgressListener();
 
           if (ReturnCode.isSuccess(returnCode)) {
@@ -1432,7 +1425,7 @@ class FileTransferService extends ChangeNotifier {
             completer.complete(null);
           }
         } catch (e) {
-          // ОТКЛЮЧАЕМ СЛУШАТЕЛЬ ПРИ ОШИБКЕ
+          // Отключаем слушатель при ошибке
           _disableFfmpegProgressListener();
           print('💥 Ошибка при конвертации: $e');
           onProgress(100.0); // Завершаем с 100%
@@ -1443,7 +1436,7 @@ class FileTransferService extends ChangeNotifier {
       return await completer.future.timeout(
         Duration(minutes: 10),
         onTimeout: () {
-          // ОТКЛЮЧАЕМ СЛУШАТЕЛЬ ПРИ ТАЙМАУТЕ
+          // Отключаем слушатель при таймауте
           _disableFfmpegProgressListener();
           print('⏱️ Конвертация превысила лимит времени');
           onProgress(100.0); // Завершаем с 100%
@@ -1451,7 +1444,7 @@ class FileTransferService extends ChangeNotifier {
         },
       );
     } catch (e, stackTrace) {
-      // ОТКЛЮЧАЕМ СЛУШАТЕЛЬ ПРИ ОШИБКЕ
+      // Отключаем слушатель при ошибке
       _disableFfmpegProgressListener();
       print('💥 Ошибка при конвертации: $e');
       print('Stack: $stackTrace');
@@ -2012,15 +2005,12 @@ class FileTransfer {
   File file;
   String targetPath;
   int receivedBytes = 0;
-  int receivedBytesClient =
-      0; // Байты, полученные клиентом (для отображения на сервере)
   int totalFiles = 0;
   int completedFiles = 0;
   final Function(double) onProgress;
   final Function(File) onComplete;
   final Function(String) onError;
   final Function(Map<String, dynamic>) sendMessage;
-  final WebSocket? socket;
 
   FileTransfer({
     required this.transferId,
@@ -2035,19 +2025,11 @@ class FileTransfer {
     required this.sendMessage,
     this.totalFiles = 1,
     this.completedFiles = 0,
-    this.socket,
   });
 
   double get progress {
     if (fileSize <= 0) return 0.0;
     final calculated = (receivedBytes.toDouble() / fileSize.toDouble()) * 100.0;
-    return calculated.clamp(0.0, 100.0);
-  }
-
-  double get clientProgress {
-    if (fileSize <= 0) return 0.0;
-    final calculated =
-        (receivedBytesClient.toDouble() / fileSize.toDouble()) * 100.0;
     return calculated.clamp(0.0, 100.0);
   }
 
@@ -2078,10 +2060,6 @@ class FileTransfer {
 
   String get progressSizeFormatted {
     return '${_formatBytes(receivedBytes)} / ${_formatBytes(fileSize)}';
-  }
-
-  String get clientProgressSizeFormatted {
-    return '${_formatBytes(receivedBytesClient)} / ${_formatBytes(fileSize)}';
   }
 
   String _formatBytes(int bytes) {

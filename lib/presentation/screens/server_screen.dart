@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../core/core.dart';
 
 class ServerScreen extends StatefulWidget {
@@ -191,7 +190,7 @@ class _ServerScreenState extends State<ServerScreen> {
   Widget _buildProgressBars(FileTransferService service) {
     final transfers = service.activeTransfers.values.toList();
 
-    // Группируем по типу
+    // Группируем по типу - ОРИГИНАЛЬНАЯ ЛОГИКА
     final photoTransfers = transfers
         .where(
           (t) => t.fileType.startsWith('image/') || t.fileType == 'image/mixed',
@@ -204,17 +203,11 @@ class _ServerScreenState extends State<ServerScreen> {
         )
         .toList();
 
-    // Рассчитываем средний прогресс для каждой группы
+    // Рассчитываем средний прогресс для каждой группы - ОРИГИНАЛЬНАЯ ЛОГИКА
     final photoProgress = _calculateAverageProgress(photoTransfers);
     final videoProgress = _calculateAverageProgress(videoTransfers);
 
-    // Показываем только если есть активные передачи
-    final hasActiveTransfers = photoProgress > 0 || videoProgress > 0;
-
-    if (!hasActiveTransfers) {
-      return SizedBox.shrink();
-    }
-
+    // ВСЕГДА показываем прогресс-бары
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 12),
       child: Padding(
@@ -223,35 +216,36 @@ class _ServerScreenState extends State<ServerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Прогресс отправки файлов:',
+              'Прогресс отправки файлов клиенту:',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             SizedBox(height: 12),
 
-            // Прогресс для фото
-            if (photoTransfers.isNotEmpty)
-              _buildProgressBar(
-                icon: Icons.photo,
-                label: 'Фотографии',
-                count: photoTransfers.first.totalFiles,
-                progress: photoProgress,
-                color: Colors.blue,
-                progressText: _getProgressText(photoTransfers),
-              ),
+            // Прогресс для фото (ВСЕГДА показываем)
+            _buildProgressBar(
+              icon: Icons.photo,
+              label: 'Фотографии',
+              count: photoTransfers.isEmpty
+                  ? 0
+                  : photoTransfers.first.totalFiles,
+              progress: photoProgress,
+              color: Colors.blue,
+              progressText: _getProgressText(photoTransfers),
+            ),
 
-            if (photoTransfers.isNotEmpty && videoTransfers.isNotEmpty)
-              SizedBox(height: 8),
+            SizedBox(height: 8),
 
-            // Прогресс для видео
-            if (videoTransfers.isNotEmpty)
-              _buildProgressBar(
-                icon: Icons.videocam,
-                label: 'Видео',
-                count: videoTransfers.first.totalFiles,
-                progress: videoProgress,
-                color: Colors.green,
-                progressText: _getProgressText(videoTransfers),
-              ),
+            // Прогресс для видео (ВСЕГДА показываем)
+            _buildProgressBar(
+              icon: Icons.videocam,
+              label: 'Видео',
+              count: videoTransfers.isEmpty
+                  ? 0
+                  : videoTransfers.first.totalFiles,
+              progress: videoProgress,
+              color: Colors.green,
+              progressText: _getProgressText(videoTransfers),
+            ),
           ],
         ),
       ),
@@ -284,46 +278,59 @@ class _ServerScreenState extends State<ServerScreen> {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                '$label ($count)',
+                count > 0 ? '$label ($count)' : label,
                 style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
               ),
             ),
-            Text(
-              '${progress.toStringAsFixed(1)}%',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-                color: color,
+            if (count > 0)
+              Text(
+                '${progress.toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: color,
+                ),
               ),
-            ),
           ],
         ),
-        SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: progress / 100,
-          backgroundColor: color.withOpacity(0.2),
-          valueColor: AlwaysStoppedAnimation<Color>(color),
-          minHeight: 6,
-        ),
-        SizedBox(height: 4),
-        Text(
-          progressText,
-          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-        ),
+        if (count > 0) ...[
+          SizedBox(height: 4),
+          LinearProgressIndicator(
+            value: progress / 100,
+            backgroundColor: color.withOpacity(0.2),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+            minHeight: 6,
+          ),
+          SizedBox(height: 4),
+          Text(
+            progressText,
+            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          ),
+        ] else ...[
+          SizedBox(height: 4),
+          Text(
+            'Нет активных передач',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
       ],
     );
   }
 
   String _getProgressText(List<FileTransfer> transfers) {
-    if (transfers.isEmpty) return '';
+    // if (transfers.isEmpty) return 'Нет активных передач';
 
-    // Для групповых передач (image/mixed или video/mixed)
+    // Для групповых передач (image/mixed или video/mixed) - ОРИГИНАЛЬНАЯ ЛОГИКА
     if (transfers.length == 1 && transfers.first.totalFiles > 1) {
       final transfer = transfers.first;
       return '${transfer.progressSizeFormatted} • ${transfer.completedFiles}/${transfer.totalFiles} файлов';
     }
 
-    // Для одиночных файлов
+    // Для одиночных файлов - ОРИГИНАЛЬНАЯ ЛОГИКА
     int totalReceived = 0;
     int totalSize = 0;
     int completed = 0;
