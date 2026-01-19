@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:local_file_transfer/core/core.dart';
@@ -18,8 +17,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _isCheckingPermissions = false;
   bool _permissionsChecked = false;
-
-  bool _isSwitched = false;
 
   @override
   void initState() {
@@ -108,19 +105,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               MaterialPageRoute(builder: (context) => ClientScreen()),
             );
           },
-        ),
-
-        Row(
-          children: [
-            CustomSwitch(
-              value: _isSwitched,
-              onChanged: (value) {
-                setState(() {
-                  _isSwitched = value;
-                });
-              },
-            ),
-          ],
         ),
       ],
     );
