@@ -7,6 +7,7 @@ import '../presentation.dart';
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool automaticallyImplyLeading;
+  final Widget? leading;
   final List<Widget>? actions;
   final VoidCallback? onBackPressed;
 
@@ -14,6 +15,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.title,
     this.automaticallyImplyLeading = true,
+    this.leading,
     this.actions,
     this.onBackPressed,
   });
@@ -32,12 +34,14 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       forceMaterialTransparency: true,
       backgroundColor: AppColors.white,
       elevation: 0.0,
-      leading: (automaticallyImplyLeading
-          ? CustomIconButton(
-              onPressed: onBackPressed ?? () => Navigator.of(context).pop(),
-              icon: icon,
-            )
-          : const SizedBox.shrink()),
+      leading:
+          leading ??
+          (automaticallyImplyLeading
+              ? CustomIconButton(
+                  onPressed: onBackPressed ?? () => Navigator.of(context).pop(),
+                  icon: icon,
+                )
+              : const SizedBox.shrink()),
       title: Text(title, style: AppTypography.link16Medium),
       actions: actions,
       actionsPadding: EdgeInsets.symmetric(horizontal: 8.0),

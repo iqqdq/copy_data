@@ -205,12 +205,7 @@ class _ClientScreenState extends State<ClientScreen> {
     }
 
     return Scaffold(
-      appBar: _showScanner
-          ? null
-          : AppBar(
-              title: Text('Receiving files'),
-              backgroundColor: Colors.white,
-            ),
+      appBar: _showScanner ? null : CustomAppBar(title: 'Receiving files'),
       body: _showScanner
           ? _buildScannerView()
           : ProgressScreen(isSending: false),

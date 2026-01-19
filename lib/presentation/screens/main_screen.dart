@@ -75,26 +75,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
       children: [
-        Text(
-          'Выберите режим работы',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: 10),
-        Text(
-          'Вы можете быть сервером для приема файлов или клиентом для отправки',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-        ),
-        SizedBox(height: 40),
-        // Кнопка сервера
+        /// Кнопка сервера
         _buildRoleButton(
           context,
           icon: Icons.wifi,
-          title: 'Быть Сервером',
-          subtitle: 'Принимать файлы от других устройств',
+          title: 'Send file',
+          subtitle: 'Choose files and share them instantly with nearby devices',
           color: Colors.blue,
           onTap: () {
             Navigator.push(
@@ -103,13 +91,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             );
           },
         ),
-        SizedBox(height: 20),
-        // Кнопка клиента
+        const SizedBox(height: 32.0),
+
+        /// Кнопка клиента
         _buildRoleButton(
           context,
           icon: Icons.phone_android,
-          title: 'Быть Клиентом',
-          subtitle: 'Подключиться к серверу и отправить файлы',
+          title: 'Receive file',
+          subtitle: 'Receive files fast and safely from other devices',
           color: Colors.green,
           onTap: () {
             Navigator.push(
@@ -118,40 +107,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             );
           },
         ),
-        SizedBox(height: 40),
-        // Инструкция
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              children: [
-                Text(
-                  'Как это работает:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '1. Одно устройство запускает сервер\n'
-                  '2. Другое устройство подключается как клиент\n'
-                  '3. Выбираете файлы и отправляете\n'
-                  '4. Все работает по локальной сети Wi-Fi',
-                  style: TextStyle(fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-        ),
-        // Кнопка для ручной проверки разрешений
-        if (!_permissionsChecked)
-          Padding(
-            padding: const EdgeInsets.only(top: 20.0),
-            child: ElevatedButton(
-              onPressed: () {
-                _checkPermissions();
-              },
-              child: Text('Проверить разрешения'),
-            ),
-          ),
       ],
     );
   }

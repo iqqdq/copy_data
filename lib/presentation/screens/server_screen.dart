@@ -128,9 +128,8 @@ class _ServerScreenState extends State<ServerScreen> {
     final service = Provider.of<FileTransferService>(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_showProgress ? 'Sending files' : 'Send file'),
-        backgroundColor: Colors.green,
+      appBar: CustomAppBar(
+        title: _showProgress ? 'Sending files' : 'Send file',
         leading: _showProgress
             ? IconButton(
                 icon: Icon(Icons.arrow_back),
