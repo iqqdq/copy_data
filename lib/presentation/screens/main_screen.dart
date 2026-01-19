@@ -19,6 +19,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _isCheckingPermissions = false;
   bool _permissionsChecked = false;
 
+  bool _isSwitched = false;
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +108,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               MaterialPageRoute(builder: (context) => ClientScreen()),
             );
           },
+        ),
+
+        Row(
+          children: [
+            CustomSwitch(
+              value: _isSwitched,
+              onChanged: (value) {
+                setState(() {
+                  _isSwitched = value;
+                });
+              },
+            ),
+          ],
         ),
       ],
     );
