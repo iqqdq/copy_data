@@ -12,25 +12,35 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  bool _showGoToMainMenu = false;
   final Map<String, bool> _cancelledTransfers = {};
 
-  @override
-  void initState() {
-    super.initState();
-    _checkForCompletedTransfers();
-  }
-
-  void _checkForCompletedTransfers() {
-    final service = Provider.of<FileTransferService>(context, listen: false);
+  bool get _showGoToMainMenu {
+    final service = Provider.of<FileTransferService>(context, listen: true);
     final transfers = service.activeTransfers.values.toList();
 
     if (transfers.isEmpty) {
-      _showGoToMainMenu = true;
-    } else {
-      final allCompleted = transfers.every((t) => t.progress >= 100);
-      _showGoToMainMenu = allCompleted;
+      return true; // Все передачи завершены или отменены
     }
+
+    // Проверяем, все ли передачи завершены (прогресс = 100%)
+    final allCompleted = transfers.every((t) => t.progress >= 100);
+    return allCompleted;
+  }
+
+  bool get _allTransfersCancelled {
+    final service = Provider.of<FileTransferService>(context, listen: true);
+    final transfers = service.activeTransfers.values.toList();
+
+    if (transfers.isEmpty) return false;
+
+    // Проверяем, все ли передачи отменены (есть в карте _cancelledTransfers)
+    final activeTransferIds = transfers.map((t) => t.transferId).toSet();
+    final cancelledTransferIds = _cancelledTransfers.keys
+        .where((id) => _cancelledTransfers[id] == true)
+        .toSet();
+
+    // Все активные передачи должны быть отменены
+    return activeTransferIds.every((id) => cancelledTransferIds.contains(id));
   }
 
   void _cancelTransfer({
@@ -43,12 +53,22 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
     await service.cancelTransfer(transferId);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(widget.isSending ? 'Отправка отменена' : 'Прием отменен'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isSending ? 'Отправка отменена' : 'Прием отменена',
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Если все передачи отменены, ждем немного и показываем кнопку
+      if (_allTransfersCancelled) {
+        setState(() {});
+      }
+    }
   }
 
   @override
@@ -56,14 +76,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final service = Provider.of<FileTransferService>(context);
     final transfers = service.activeTransfers.values.toList();
 
-    // Проверяем завершение передач при каждом обновлении
+    // Автоматически показываем кнопку "В главное меню" при завершении
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final allCompleted =
-          transfers.isNotEmpty && transfers.every((t) => t.progress >= 100);
-      if (allCompleted && !_showGoToMainMenu) {
-        setState(() {
-          _showGoToMainMenu = true;
-        });
+      if (_showGoToMainMenu && transfers.isNotEmpty && mounted) {
+        setState(() {});
       }
     });
 
@@ -91,8 +107,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 style: TextStyle(fontSize: 14, color: Colors.grey),
                 textAlign: TextAlign.center,
               ),
-            SizedBox(height: 32),
-            if (_showGoToMainMenu) _buildGoToMainMenuButton(),
           ],
         ),
       );
@@ -111,67 +125,89 @@ class _ProgressScreenState extends State<ProgressScreen> {
         )
         .toList();
 
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  // Карточка для фото
-                  if (photoTransfers.isNotEmpty)
-                    _buildTransferCard(
-                      service: service,
-                      transfers: photoTransfers,
-                      icon: Icons.photo,
-                      label: 'Фотографии',
-                      color: Colors.blue,
-                      isPhoto: true,
-                    ),
+    return Scaffold(
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    // Карточка для фото
+                    if (photoTransfers.isNotEmpty)
+                      _buildTransferCard(
+                        service: service,
+                        transfers: photoTransfers,
+                        icon: Icons.photo,
+                        label: 'Фотографии',
+                        color: Colors.blue,
+                        isPhoto: true,
+                      ),
 
-                  SizedBox(height: 16),
+                    SizedBox(height: 16),
 
-                  // Карточка для видео
-                  if (videoTransfers.isNotEmpty)
-                    _buildTransferCard(
-                      service: service,
-                      transfers: videoTransfers,
-                      icon: Icons.videocam,
-                      label: 'Видео',
-                      color: Colors.green,
-                      isPhoto: false,
-                    ),
+                    // Карточка для видео
+                    if (videoTransfers.isNotEmpty)
+                      _buildTransferCard(
+                        service: service,
+                        transfers: videoTransfers,
+                        icon: Icons.videocam,
+                        label: 'Видео',
+                        color: Colors.green,
+                        isPhoto: false,
+                      ),
 
-                  if (photoTransfers.isEmpty && videoTransfers.isEmpty)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Center(
-                          child: Text(
-                            'Нет активных передач',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontStyle: FontStyle.italic,
+                    if (photoTransfers.isEmpty && videoTransfers.isEmpty)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 48,
+                                  color: Colors.green,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Все передачи завершены',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Автоматический возврат...',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+
+                    SizedBox(height: 16),
+
+                    // Кнопка "В главное меню" показывается только при завершении всех передач
+                    if (_showGoToMainMenu && transfers.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16.0),
+                        child: _buildGoToMainMenuButton(),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-
-        // Кнопка перехода в главное меню
-        if (_showGoToMainMenu)
-          Container(
-            padding: EdgeInsets.all(16),
-            color: Colors.grey[100],
-            child: _buildGoToMainMenuButton(),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -226,9 +262,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 if (progress < 100 && !isCancelled)
                   Icon(
                     widget.isSending ? Icons.upload : Icons.download,
-                    color: color.withOpacity(0.7),
+                    color: color.withValues(alpha: 0.7),
                   ),
                 if (isCancelled) Icon(Icons.cancel, color: Colors.red),
+                if (progress >= 100 && !isCancelled)
+                  Icon(Icons.check_circle, color: Colors.green),
               ],
             ),
 
@@ -237,9 +275,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
             // Прогресс бар
             LinearProgressIndicator(
               value: progress / 100,
-              backgroundColor: color.withOpacity(0.2),
+              backgroundColor: color.withValues(alpha: 0.2),
               valueColor: AlwaysStoppedAnimation<Color>(
-                isCancelled ? Colors.grey : color,
+                isCancelled
+                    ? Colors.grey
+                    : (progress >= 100 ? Colors.green : color),
               ),
               minHeight: 8,
             ),
@@ -265,6 +305,15 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                if (progress >= 100 && !isCancelled)
+                  Text(
+                    'Завершено',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
               ],
             ),
 
@@ -281,9 +330,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     style: TextStyle(fontSize: 14),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.withOpacity(0.1),
+                    backgroundColor: Colors.red.withValues(alpha: 0.1),
                     foregroundColor: Colors.red,
-                    side: BorderSide(color: Colors.red.withOpacity(0.3)),
+                    side: BorderSide(color: Colors.red.withValues(alpha: 0.3)),
                     padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   ),
                   onPressed: () {

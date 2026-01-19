@@ -3,22 +3,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
+import 'package:flutter/foundation.dart';
+
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
-import 'package:flutter/foundation.dart';
-
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 
 class FileTransferService extends ChangeNotifier {
   static const int CHUNK_SIZE = 32 * 1024; // 32KB
@@ -42,10 +40,8 @@ class FileTransferService extends ChangeNotifier {
   final Map<String, FileReceiver> _fileReceivers = {};
   final String _receivedFilesDir = 'ReceivedFiles';
   Directory? _appDocumentsDirectory;
-  bool _hasStoragePermission = false;
 
   bool _isProgressListenerActive = false;
-  StreamSubscription? _ffmpegLogSubscription;
 
   // Getters
   bool get isServerRunning => _isServerRunning;
@@ -65,26 +61,8 @@ class FileTransferService extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
-    await _checkPermissions();
     await _initializeDirectories();
     _loadReceivedMedia();
-  }
-
-  Future<void> _checkPermissions() async {
-    if (Platform.isAndroid || Platform.isIOS) {
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-      }
-      _hasStoragePermission = status.isGranted;
-
-      if (Platform.isAndroid) {
-        final mediaStatus = await Permission.accessMediaLocation.status;
-        if (!mediaStatus.isGranted) {
-          await Permission.accessMediaLocation.request();
-        }
-      }
-    }
   }
 
   Future<void> _initializeDirectories() async {
@@ -257,9 +235,29 @@ class FileTransferService extends ChangeNotifier {
         case 'progress_update':
           _handleProgressUpdateFromClient(socket, data);
           break;
+        // ДОБАВЬТЕ ЭТОТ КЕЙС:
+        case 'cancel_transfer':
+          _handleCancelTransferFromClient(socket, data);
+          break;
       }
     } catch (e) {
       print('❌ Ошибка обработки сообщения сервером: $e');
+    }
+  }
+
+  // ДОБАВЬТЕ ЭТОТ МЕТОД:
+  void _handleCancelTransferFromClient(
+    WebSocket socket,
+    Map<String, dynamic> data,
+  ) {
+    try {
+      final transferId = data['transferId'] as String?;
+      if (transferId != null) {
+        print('🛑 Получена отмена передачи от клиента: $transferId');
+        _cancelTransferInternal(transferId, notifyRemote: false);
+      }
+    } catch (e) {
+      print('❌ Ошибка обработки отмены от клиента: $e');
     }
   }
 
@@ -434,10 +432,6 @@ class FileTransferService extends ChangeNotifier {
         },
         onComplete: (file) {
           print('✅ Все фото отправлены с сервера');
-          // Future.delayed(Duration(seconds: 3), () { // TODO: DELETE
-          //   _activeTransfers.remove(photoTransferId);
-          //   notifyListeners();
-          // });
         },
         onError: (error) {
           print('❌ Ошибка отправки фото: $error');
@@ -492,10 +486,6 @@ class FileTransferService extends ChangeNotifier {
         },
         onComplete: (file) {
           print('✅ Все видео отправлены с сервера');
-          // Future.delayed(Duration(seconds: 3), () { // TODO: DELETE
-          //   _activeTransfers.remove(videoTransferId);
-          //   notifyListeners();
-          // });
         },
         onError: (error) {
           print('❌ Ошибка отправки видео: $error');
@@ -557,7 +547,16 @@ class FileTransferService extends ChangeNotifier {
       return;
     }
 
-    // ОТПРАВЛЯЕМ МЕТАДАННЫЕ ГРУППЫ ПЕРЕД НАЧАЛОМ ПЕРЕДАЧИ
+    // Флаг отмены передачи
+    bool isCancelled = false;
+
+    // Проверяем отмену перед началом
+    if (!_activeTransfers.containsKey(groupTransferId)) {
+      print('⚠️ Передача была отменена до начала отправки');
+      return;
+    }
+
+    // ОТПРАВЛЯЕМ МЕТАДАННЫЕ ГРУППЫ
     final groupMetadata = {
       'type': 'group_metadata',
       'transferId': groupTransferId,
@@ -593,6 +592,13 @@ class FileTransferService extends ChangeNotifier {
     );
 
     for (int i = 0; i < files.length; i++) {
+      // Проверяем отмену перед каждым файлом
+      if (!_activeTransfers.containsKey(groupTransferId)) {
+        print('⚠️ Передача отменена во время отправки файла ${i + 1}');
+        isCancelled = true;
+        break;
+      }
+
       final file = files[i];
       final fileName = path.basename(file.path);
       final mimeType = lookupMimeType(file.path) ?? 'application/octet-stream';
@@ -606,43 +612,50 @@ class FileTransferService extends ChangeNotifier {
         '(${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB)',
       );
 
-      // Точная доля этого файла в общей группе - ОРИГИНАЛЬНАЯ ЛОГИКА
+      // Проверяем отмену
+      if (isCancelled || !_activeTransfers.containsKey(groupTransferId)) {
+        print('⚠️ Отмена во время подготовки файла ${i + 1}');
+        break;
+      }
+
+      // Точная доля этого файла в общей группе
       final fileShare = fileSize.toDouble() / totalGroupSize.toDouble();
 
-      // Прогресс до начала этого файла (в процентах)
+      // Прогресс до начала этого файла
       final progressBeforeThisFile =
           (totalBytesSent.toDouble() / totalGroupSize.toDouble()) * 100.0;
 
-      // Для видео: конвертация (40%) + передача (60%)
-      // Для фото: только передача (100%)
       final conversionWeight = isVideoGroup ? 40.0 : 0.0;
       final transferWeight = isVideoGroup ? 60.0 : 100.0;
 
       if (isVideoGroup && mimeType.startsWith('video/') && _isMovFile(file)) {
         print('🎬 Конвертация .mov в .mp4 на сервере...');
 
-        // ОТПРАВЛЯЕМ МЕТАДАННЫЕ СРАЗУ
         final fileTransferId = '${groupTransferId}_$i';
-        final currentFileSize = fileSize; // Размер оригинального файла
+        final currentFileSize = fileSize;
 
         final metadata = {
           'type': 'file_metadata',
           'transferId': fileTransferId,
           'fileName': fileName,
           'fileSize': currentFileSize,
-          'fileType': mimeType, // Оригинальный тип (video/mov)
+          'fileType': mimeType,
           'timestamp': DateTime.now().toIso8601String(),
-          'isConverting': true, // Можно добавить флаг
+          'isConverting': true,
         };
 
-        socket.add(jsonEncode(metadata)); // <-- ТЕПЕРЬ ДО конвертации!
-
-        // Ждем немного чтобы клиент успел обработать метаданные
+        socket.add(jsonEncode(metadata));
         await Future.delayed(Duration(milliseconds: 100));
 
-        // Прогресс на начало конвертации этого файла
+        // Проверяем отмену перед конвертацией
+        if (!_activeTransfers.containsKey(groupTransferId)) {
+          print('⚠️ Передача отменена перед конвертацией');
+          isCancelled = true;
+          break;
+        }
+
+        // Прогресс на начало конвертации
         transfer.onProgress(progressBeforeThisFile);
-        // Отправляем прогресс конвертации клиенту
         _sendProgressUpdateToClient(
           socket,
           groupTransferId,
@@ -654,26 +667,28 @@ class FileTransferService extends ChangeNotifier {
         final convertedFile = await _convertMovToMp4(file, (
           conversionProgress,
         ) {
-          // conversionProgress от 0 до 100
+          // Проверяем отмену во время конвертации
+          if (!_activeTransfers.containsKey(groupTransferId)) {
+            print('⚠️ Передача отменена во время конвертации');
+            isCancelled = true;
+            return;
+          }
 
-          // Доля конвертации в общем прогрессе (от 0 до fileShare * 0.4)
           final conversionShareInGroup =
               (conversionProgress / 100.0) *
               conversionWeight *
               fileShare /
               100.0;
 
-          // Общий прогресс группы = прогресс до этого файла + прогресс конвертации
           final groupProgress =
               progressBeforeThisFile + (conversionShareInGroup * 100.0);
 
-          // Ограничиваем прогресс, чтобы не превышал 100%
           final clampedProgress = groupProgress.clamp(0.0, 100.0);
 
           transfer.receivedBytes = (clampedProgress / 100.0 * totalGroupSize)
               .toInt();
           transfer.onProgress(clampedProgress);
-          // Отправляем прогресс конвертации клиенту
+
           _sendProgressUpdateToClient(
             socket,
             groupTransferId,
@@ -692,8 +707,14 @@ class FileTransferService extends ChangeNotifier {
           fileToSend = convertedFile;
           fileType = 'video/mp4';
         }
+
+        // Проверяем отмену после конвертации
+        if (!_activeTransfers.containsKey(groupTransferId)) {
+          print('⚠️ Передача отменена после конвертации');
+          isCancelled = true;
+          break;
+        }
       } else {
-        // Для видео без конвертации сразу отправляем прогресс начала файла
         _sendProgressUpdateToClient(
           socket,
           groupTransferId,
@@ -703,7 +724,12 @@ class FileTransferService extends ChangeNotifier {
         );
       }
 
-      // После конвертации (или сразу для фото) устанавливаем прогресс на начало передачи
+      // Проверяем отмену
+      if (isCancelled || !_activeTransfers.containsKey(groupTransferId)) {
+        print('⚠️ Отмена перед началом передачи файла');
+        break;
+      }
+
       final progressBeforeTransfer =
           progressBeforeThisFile + (conversionWeight * fileShare);
       final clampedProgressBeforeTransfer = progressBeforeTransfer.clamp(
@@ -714,7 +740,6 @@ class FileTransferService extends ChangeNotifier {
       transfer.receivedBytes =
           (clampedProgressBeforeTransfer / 100.0 * totalGroupSize).toInt();
       transfer.onProgress(clampedProgressBeforeTransfer);
-      // Отправляем прогресс начала передачи клиенту
       _sendProgressUpdateToClient(
         socket,
         groupTransferId,
@@ -743,53 +768,70 @@ class FileTransferService extends ChangeNotifier {
       socket.add(jsonEncode(metadata));
       await Future.delayed(Duration(milliseconds: 50));
 
+      // Открываем поток с проверкой отмены
       final stream = fileToSend.openRead();
       var chunkIndex = 0;
       var fileSentBytes = 0;
 
-      await for (final chunk in stream) {
-        final chunkMessage = {
-          'type': 'file_chunk',
-          'transferId': fileTransferId,
-          'chunkIndex': chunkIndex,
-          'chunkData': base64Encode(chunk),
-          'isLast': false,
-          'timestamp': DateTime.now().toIso8601String(),
-        };
+      try {
+        await for (final chunk in stream) {
+          // Проверяем отмену перед отправкой каждого чанка
+          if (!_activeTransfers.containsKey(groupTransferId)) {
+            print('⚠️ Передача отменена во время отправки чанка $chunkIndex');
+            isCancelled = true;
+            break;
+          }
 
-        socket.add(jsonEncode(chunkMessage));
-        fileSentBytes += chunk.length;
-        chunkIndex++;
+          final chunkMessage = {
+            'type': 'file_chunk',
+            'transferId': fileTransferId,
+            'chunkIndex': chunkIndex,
+            'chunkData': base64Encode(chunk),
+            'isLast': false,
+            'timestamp': DateTime.now().toIso8601String(),
+          };
 
-        // Рассчитываем прогресс передачи для этого файла (0-1)
-        final fileTransferProgress =
-            fileSentBytes.toDouble() / currentFileSize.toDouble();
+          socket.add(jsonEncode(chunkMessage));
+          fileSentBytes += chunk.length;
+          chunkIndex++;
 
-        // Доля передачи в общем прогрессе группы
-        final transferShareInGroup =
-            fileTransferProgress * transferWeight * fileShare / 100.0;
+          final fileTransferProgress =
+              fileSentBytes.toDouble() / currentFileSize.toDouble();
 
-        // Общий прогресс группы = прогресс до передачи этого файла + прогресс передачи
-        final groupProgress =
-            progressBeforeTransfer + (transferShareInGroup * 100.0);
+          final transferShareInGroup =
+              fileTransferProgress * transferWeight * fileShare / 100.0;
 
-        // Ограничиваем прогресс
-        final clampedGroupProgress = groupProgress.clamp(0.0, 100.0);
+          final groupProgress =
+              progressBeforeTransfer + (transferShareInGroup * 100.0);
 
-        transfer.receivedBytes = (clampedGroupProgress / 100.0 * totalGroupSize)
-            .toInt();
-        transfer.onProgress(clampedGroupProgress);
+          final clampedGroupProgress = groupProgress.clamp(0.0, 100.0);
 
-        // Отправляем прогресс клиенту каждые 2% или при значительных изменениях
-        if (chunkIndex % 2 == 0 || fileSentBytes == currentFileSize) {
-          _sendProgressUpdateToClient(
-            socket,
-            groupTransferId,
-            clampedGroupProgress,
-            transfer.receivedBytes,
-            totalGroupSize,
-          );
+          transfer.receivedBytes =
+              (clampedGroupProgress / 100.0 * totalGroupSize).toInt();
+          transfer.onProgress(clampedGroupProgress);
+
+          if (chunkIndex % 2 == 0 || fileSentBytes == currentFileSize) {
+            _sendProgressUpdateToClient(
+              socket,
+              groupTransferId,
+              clampedGroupProgress,
+              transfer.receivedBytes,
+              totalGroupSize,
+            );
+          }
         }
+      } catch (e) {
+        if (!isCancelled) {
+          print('❌ Ошибка во время отправки файла: $e');
+          transfer.onError(e.toString());
+          break;
+        }
+      }
+
+      // Если отменено, выходим
+      if (isCancelled || !_activeTransfers.containsKey(groupTransferId)) {
+        print('⚠️ Передача отменена, прекращаем отправку файлов');
+        break;
       }
 
       // Финальное сообщение для файла
@@ -804,21 +846,15 @@ class FileTransferService extends ChangeNotifier {
 
       socket.add(jsonEncode(finalMessage));
 
-      // Обновляем общий счетчик отправленных байт
       totalBytesSent += fileSize;
 
-      // Устанавливаем ТОЧНЫЙ прогресс после завершения файла
-      // Для видео: конвертация (40%) + передача (60%) = 100% от доли файла
-      // Для фото: передача (100%) = 100% от доли файла
       final exactGroupProgress =
           (totalBytesSent.toDouble() / totalGroupSize.toDouble()) * 100.0;
-      // Ограничиваем 100%
       final clampedExactProgress = exactGroupProgress.clamp(0.0, 100.0);
 
       transfer.receivedBytes = (clampedExactProgress / 100.0 * totalGroupSize)
           .toInt();
       transfer.onProgress(clampedExactProgress);
-      // Отправляем финальный прогресс для этого файла клиенту
       _sendProgressUpdateToClient(
         socket,
         groupTransferId,
@@ -827,7 +863,6 @@ class FileTransferService extends ChangeNotifier {
         totalGroupSize,
       );
 
-      // Увеличиваем счетчик завершенных файлов
       transfer.completedFiles++;
 
       print(
@@ -836,7 +871,7 @@ class FileTransferService extends ChangeNotifier {
         '${clampedExactProgress.toStringAsFixed(1)}%)',
       );
 
-      // Удаляем временный конвертированный файл
+      // Удаляем временный файл
       if (fileToSend.path != file.path && await fileToSend.exists()) {
         try {
           await fileToSend.delete();
@@ -845,24 +880,36 @@ class FileTransferService extends ChangeNotifier {
           print('⚠️ Не удалось удалить временный файл: $e');
         }
       }
+
+      // Проверяем отмену
+      if (!_activeTransfers.containsKey(groupTransferId)) {
+        print('⚠️ Передача отменена после завершения файла');
+        isCancelled = true;
+        break;
+      }
     }
 
-    // Завершаем прогресс группы - ТОЧНО 100%
-    transfer.receivedBytes = totalGroupSize;
-    transfer.onProgress(100.0);
-    _sendProgressUpdateToClient(
-      socket,
-      groupTransferId,
-      100.0,
-      totalGroupSize,
-      totalGroupSize,
-    );
-    transfer.onComplete(files.first);
+    if (isCancelled) {
+      print('🛑 Отправка отменена пользователем');
+      transfer.onError('Передача отменена');
+    } else {
+      // Завершаем прогресс группы - ТОЧНО 100%
+      transfer.receivedBytes = totalGroupSize;
+      transfer.onProgress(100.0);
+      _sendProgressUpdateToClient(
+        socket,
+        groupTransferId,
+        100.0,
+        totalGroupSize,
+        totalGroupSize,
+      );
+      transfer.onComplete(files.first);
 
-    print(
-      '🎉 Все ${files.length} ${isVideoGroup ? 'видео' : 'фото'} отправлены с сервера! '
-      '(100%, ${transfer.completedFiles}/${transfer.totalFiles} файлов)',
-    );
+      print(
+        '🎉 Все ${files.length} ${isVideoGroup ? 'видео' : 'фото'} отправлены с сервера! '
+        '(100%, ${transfer.completedFiles}/${transfer.totalFiles} файлов)',
+      );
+    }
   }
 
   void _sendProgressUpdateToClient(
@@ -888,11 +935,20 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  // Добавьте этот метод в класс FileTransferService
   Future<void> cancelTransfer(String transferId) async {
     try {
-      print('🛑 Отмена передачи: $transferId');
+      print('🛑 Инициация отмены передачи: $transferId');
+      await _cancelTransferInternal(transferId, notifyRemote: true);
+    } catch (e) {
+      print('❌ Ошибка при отмене передачи: $e');
+    }
+  }
 
+  Future<void> _cancelTransferInternal(
+    String transferId, {
+    required bool notifyRemote,
+  }) async {
+    try {
       // Находим передачу
       final transfer = _activeTransfers[transferId];
       if (transfer == null) {
@@ -900,33 +956,60 @@ class FileTransferService extends ChangeNotifier {
         return;
       }
 
-      // Закрываем WebSocket соединение если нужно
-      if (_connectedClients.isNotEmpty) {
+      print('🛑 Отменяем передачу: ${transfer.fileName} ($transferId)');
+
+      // Отправляем сообщение об отмене другой стороне
+      if (notifyRemote) {
         final cancelMessage = {
           'type': 'cancel_transfer',
           'transferId': transferId,
           'timestamp': DateTime.now().toIso8601String(),
         };
 
-        // Отправляем сообщение об отмене
-        for (final client in _connectedClients) {
-          try {
-            client.add(jsonEncode(cancelMessage));
-          } catch (e) {
-            print('⚠️ Ошибка отправки отмены: $e');
+        if (_connectedClients.isNotEmpty) {
+          // Сервер отменяет - отправляем клиенту
+          for (final client in _connectedClients) {
+            try {
+              client.add(jsonEncode(cancelMessage));
+              print('📤 Отправлена отмена клиенту: $transferId');
+            } catch (e) {
+              print('⚠️ Ошибка отправки отмены клиенту: $e');
+            }
           }
+        } else if (_clientChannel != null) {
+          // Клиент отменяет - отправляем серверу
+          _sendClientMessage(cancelMessage);
+          print('📤 Отправлена отмена серверу: $transferId');
         }
+      }
+
+      // Закрываем связанные файловые приемники
+      final keysToRemove = <String>[];
+      for (final entry in _fileReceivers.entries) {
+        if (entry.key.startsWith(transferId) ||
+            entry.key.contains(transferId)) {
+          print('🛑 Закрываем приемник файла: ${entry.key}');
+          await entry.value.close();
+          keysToRemove.add(entry.key);
+        }
+      }
+      for (final key in keysToRemove) {
+        _fileReceivers.remove(key);
       }
 
       // Удаляем передачу
       _activeTransfers.remove(transferId);
 
+      // Вызываем callback ошибки для передачи
+      transfer.onError('Передача отменена пользователем');
+
       // Уведомляем UI
       notifyListeners();
 
-      print('✅ Передача отменена: $transferId');
+      print('✅ Передача успешно отменена: $transferId');
     } catch (e) {
       print('❌ Ошибка при отмене передачи: $e');
+      rethrow;
     }
   }
 
@@ -1028,9 +1111,25 @@ class FileTransferService extends ChangeNotifier {
         case 'progress_update':
           _handleProgressFromServer(data);
           break;
+        // ДОБАВЬТЕ ЭТОТ КЕЙС:
+        case 'cancel_transfer':
+          _handleCancelTransferFromServer(data);
+          break;
       }
     } catch (e) {
       print('❌ Ошибка обработки сообщения клиентом: $e');
+    }
+  }
+
+  void _handleCancelTransferFromServer(Map<String, dynamic> data) {
+    try {
+      final transferId = data['transferId'] as String?;
+      if (transferId != null) {
+        print('🛑 Получена отмена передачи от сервера: $transferId');
+        _cancelTransferInternal(transferId, notifyRemote: false);
+      }
+    } catch (e) {
+      print('❌ Ошибка обработки отмены от сервера: $e');
     }
   }
 
@@ -1061,10 +1160,6 @@ class FileTransferService extends ChangeNotifier {
           },
           onComplete: (file) {
             print('✅ Групповая передача завершена: $fileName');
-            // Future.delayed(Duration(seconds: 3), () { // TODO: DELETE
-            //   _activeTransfers.remove(transferId);
-            //   notifyListeners();
-            // });
           },
           onError: (error) {
             print('❌ Ошибка групповой передачи: $error');
@@ -1186,19 +1281,11 @@ class FileTransferService extends ChangeNotifier {
               // Обновляем прогресс до 100%
               groupTransfer.receivedBytes = groupTransfer.fileSize;
               groupTransfer.onProgress(100.0);
-
-              // Ждем немного перед удалением, чтобы UI показал 100%
-              // await Future.delayed(Duration(seconds: 2));
-              // _activeTransfers.remove(groupTransferId); // TODO: DELETE
             }
             notifyListeners();
           } else {
             // Для одиночных файлов удаляем передачу
             print('✅ Одиночный файл завершен: $fileName');
-            // Future.delayed(Duration(seconds: 2), () { // TODO: DELETE
-            //   _activeTransfers.remove(transferId);
-            //   notifyListeners();
-            // });
           }
 
           final media = ReceivedMedia(
@@ -1242,10 +1329,6 @@ class FileTransferService extends ChangeNotifier {
           },
           onComplete: (file) {
             print('✅ Передача от сервера завершена');
-            // Future.delayed(Duration(seconds: 2), () { // TODO: DELETE
-            //   _activeTransfers.remove(transferId);
-            //   notifyListeners();
-            // });
           },
           onError: (error) {
             print('❌ Ошибка передачи от сервера: $error');
@@ -1283,9 +1366,10 @@ class FileTransferService extends ChangeNotifier {
     final chunkData = data['chunkData'] as String;
     final isLast = data['isLast'] as bool? ?? false;
 
+    // Проверяем, не отменена ли передача
     final receiver = _fileReceivers[transferId];
     if (receiver == null) {
-      print('⚠️ Чанк для неизвестной передачи: $transferId');
+      print('⚠️ Чанк для неизвестной или отмененной передачи: $transferId');
       return;
     }
 
@@ -1293,15 +1377,12 @@ class FileTransferService extends ChangeNotifier {
       final bytes = base64Decode(chunkData);
       await receiver.writeChunk(bytes);
 
-      // Находим соответствующую передачу для обновления прогресса
+      // Находим соответствующую передачу
       FileTransfer? transferToUpdate;
 
-      // Прямой поиск
       if (_activeTransfers.containsKey(transferId)) {
         transferToUpdate = _activeTransfers[transferId];
-      }
-      // Поиск групповой передачи для файла в группе
-      else if (transferId.contains('_')) {
+      } else if (transferId.contains('_')) {
         final parts = transferId.split('_');
         final lastPart = parts.last;
         if (int.tryParse(lastPart) != null) {
@@ -1310,6 +1391,7 @@ class FileTransferService extends ChangeNotifier {
         }
       }
 
+      // Если передача не найдена (возможно отменена), пропускаем обновление
       if (transferToUpdate != null) {
         transferToUpdate.receivedBytes += bytes.length;
 
@@ -1340,22 +1422,16 @@ class FileTransferService extends ChangeNotifier {
         await receiver.complete();
       }
     } catch (e) {
-      print('❌ Ошибка обработки чанка от сервера: $e');
-      receiver.onError(e.toString());
-      _fileReceivers.remove(transferId);
-
-      // Удаляем соответствующие передачи
-      if (_activeTransfers.containsKey(transferId)) {
-        _activeTransfers.remove(transferId);
-      } else if (transferId.contains('_')) {
-        final parts = transferId.split('_');
-        final lastPart = parts.last;
-        if (int.tryParse(lastPart) != null) {
-          final groupId = parts.sublist(0, parts.length - 1).join('_');
-          _activeTransfers.remove(groupId);
-        }
+      // Не логируем ошибку, если передача была отменена
+      if (!transferId.contains('cancelled')) {
+        print('❌ Ошибка обработки чанка от сервера: $e');
       }
-      notifyListeners();
+
+      // Если receiver еще существует, закрываем его
+      if (_fileReceivers.containsKey(transferId)) {
+        receiver.onError(e.toString());
+        _fileReceivers.remove(transferId);
+      }
     }
   }
 
@@ -1472,7 +1548,20 @@ class FileTransferService extends ChangeNotifier {
     return fileName.endsWith('.mov') || fileName.endsWith('.quicktime');
   }
 
-  Future<File?> _convertMovToMp4(File file, Function(double) onProgress) async {
+  Future<File?> _convertMovToMp4(
+    File file,
+    Function(double) onProgress, {
+    Completer<void>? cancelCompleter,
+  }) async {
+    final localCancelCompleter = cancelCompleter ?? Completer<void>();
+    bool isCancelled = false;
+
+    // Подписываемся на отмену
+    localCancelCompleter.future.then((_) {
+      isCancelled = true;
+      print('🛑 Получен сигнал отмены конвертации');
+    });
+
     try {
       print('🎬 Конвертация HEVC (iPhone) в H.264 (Android)...');
 
@@ -1485,7 +1574,6 @@ class FileTransferService extends ChangeNotifier {
       final fileSize = await file.length();
       print('📊 Размер: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
 
-      // Получаем информацию о видео (длительность)
       final duration = await _getVideoDuration(file);
       if (duration == null) {
         print('⚠️ Не удалось получить длительность видео');
@@ -1493,10 +1581,9 @@ class FileTransferService extends ChangeNotifier {
         return null;
       }
 
-      print('⏱️ Длительность видео: ${duration} секунд');
-      onProgress(0.0); // Начинаем с 0%
+      print('⏱️ Длительность видео: $duration секунд');
+      onProgress(0.0);
 
-      // Создаем временный файл
       final tempDir = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final outputPath = path.join(
@@ -1506,22 +1593,21 @@ class FileTransferService extends ChangeNotifier {
 
       print('📁 Выходной файл: $outputPath');
 
-      // Команда FFmpeg для конвертации
       final conversionCommand =
           '''
-      -i "${file.path}" \
-      -c:v libx264 \
-      -preset faster \
-      -crf 24 \
-      -profile:v high \
-      -level 4.2 \
-      -pix_fmt yuv420p \
-      -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" \
-      -movflags +faststart \
-      -c:a aac \
-      -b:a 128k \
-      -ac 2 \
-      -ar 44100 \
+      -i "${file.path}"
+      -c:v libx264
+      -preset faster
+      -crf 24
+      -profile:v high
+      -level 4.2
+      -pix_fmt yuv420p
+      -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+      -movflags +faststart
+      -c:a aac
+      -b:a 128k
+      -ac 2
+      -ar 44100
       -y "$outputPath"
     '''
               .replaceAll(RegExp(r'\s+'), ' ');
@@ -1529,77 +1615,110 @@ class FileTransferService extends ChangeNotifier {
       print('🚀 Команда конвертации: $conversionCommand');
 
       final completer = Completer<File?>();
-
-      // Храним последний отправленный прогресс
       double lastSentProgress = -1.0;
 
-      // Включаем слушатель прогресса перед началом
+      // Храним ссылку на сессию для возможной отмены
+      FFmpegSession? ffmpegSession;
+
+      // Включаем слушатель прогресса
       _setupFfmpegProgressListener((progress) {
-        // progress от 0 до 100
-        // Отправляем прогресс только при значительном изменении (минимум 1%)
+        if (isCancelled) return;
+
         if (progress - lastSentProgress >= 1.0 || progress >= 100.0) {
           onProgress(progress);
           lastSentProgress = progress;
         }
       }, duration);
 
-      // Запускаем FFmpeg
+      // Запускаем FFmpeg асинхронно с возможностью отслеживания
       FFmpegKit.executeAsync(conversionCommand, (session) async {
-        try {
-          final returnCode = await session.getReturnCode();
+        ffmpegSession = session;
 
-          // Отключаем слушатель после завершения
-          _disableFfmpegProgressListener();
+        // Проверяем отмену сразу после получения сессии
+        if (isCancelled) {
+          print('🛑 Конвертация отменена перед началом');
+          await _tryCancelFfmpegSession(session);
+          completer.complete(null);
+          return;
+        }
 
-          if (ReturnCode.isSuccess(returnCode)) {
-            final outputFile = File(outputPath);
+        final returnCode = await session.getReturnCode();
 
-            if (await outputFile.exists()) {
-              final convertedSize = await outputFile.length();
+        // Отключаем слушатель
+        _disableFfmpegProgressListener();
 
-              print('✅ Конвертация успешна!');
-              print(
-                '📊 Новый размер: ${(convertedSize / 1024 / 1024).toStringAsFixed(2)} MB',
-              );
+        // Проверяем отмену
+        if (isCancelled) {
+          print('🛑 Конвертация отменена пользователем во время выполнения');
+          // Удаляем временный файл если создан
+          final tempFile = File(outputPath);
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+          }
+          completer.complete(null);
+          return;
+        }
 
-              onProgress(100.0); // Завершаем с 100%
-              completer.complete(outputFile);
-            } else {
-              onProgress(100.0); // Завершаем с 100%
-              completer.complete(null);
-            }
+        if (ReturnCode.isSuccess(returnCode)) {
+          final outputFile = File(outputPath);
+
+          if (await outputFile.exists()) {
+            final convertedSize = await outputFile.length();
+
+            print('✅ Конвертация успешна!');
+            print(
+              '📊 Новый размер: ${(convertedSize / 1024 / 1024).toStringAsFixed(2)} MB',
+            );
+
+            onProgress(100.0);
+            completer.complete(outputFile);
           } else {
-            final output = await session.getOutput();
-            print('❌ Конвертация не удалась: $output');
-            onProgress(100.0); // Завершаем с 100%
+            onProgress(100.0);
             completer.complete(null);
           }
-        } catch (e) {
-          // Отключаем слушатель при ошибке
-          _disableFfmpegProgressListener();
-          print('💥 Ошибка при конвертации: $e');
-          onProgress(100.0); // Завершаем с 100%
+        } else {
+          final output = await session.getOutput();
+          print('❌ Конвертация не удалась: $output');
+          onProgress(100.0);
           completer.complete(null);
         }
       });
 
+      // Ожидаем завершения или отмены
       return await completer.future.timeout(
         Duration(minutes: 10),
         onTimeout: () {
-          // Отключаем слушатель при таймауте
-          _disableFfmpegProgressListener();
-          print('⏱️ Конвертация превысила лимит времени');
-          onProgress(100.0); // Завершаем с 100%
+          if (!isCancelled) {
+            print('⏱️ Конвертация превысила лимит времени');
+            onProgress(100.0);
+          }
           return null;
         },
       );
     } catch (e, stackTrace) {
-      // Отключаем слушатель при ошибке
       _disableFfmpegProgressListener();
       print('💥 Ошибка при конвертации: $e');
       print('Stack: $stackTrace');
-      onProgress(100.0); // Всегда завершаем прогресс
+      onProgress(100.0);
       return null;
+    }
+  }
+
+  Future<void> _tryCancelFfmpegSession(FFmpegSession session) async {
+    try {
+      // Попытка отменить выполнение FFmpeg
+      // Обратите внимание: FFmpegKit может не поддерживать отмену напрямую
+      // Это зависит от версии библиотеки
+      print('🛑 Пытаюсь отменить выполнение FFmpeg...');
+
+      // Альтернативный подход: отправляем SIGTERM если поддерживается
+      // или просто игнорируем результат
+      await session.cancel();
+
+      // Ждем немного для завершения
+      await Future.delayed(Duration(milliseconds: 500));
+    } catch (e) {
+      print('⚠️ Не удалось отменить FFmpeg сессию: $e');
     }
   }
 

@@ -47,8 +47,6 @@
     <array>
         <string>_filetransfer._tcp</string>
     </array>
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>Для передачи файлов между устройствами в локальной сети</string>
     <key>NSBonjourServices</key>
     <array>
         <string>_filetransfer._tcp</string>
@@ -57,9 +55,13 @@
 	    <true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	    <true/>
+    <key>NSLocalNetworkUsageDescription</key>
+        <string>$(PRODUCT_NAME) transfers files between devices on the local network.</string>
+    <key>NSCameraUsageDescription</key>
+        <string>$(PRODUCT_NAME) requires access to the camera.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-       <string>Для сохранения полученных фотографий в вашу галерею</string>
+        <string>$(PRODUCT_NAME) saves received photos to your gallery.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
-       <string>Для сохранения полученных фотографий в вашу галерею</string>
+        <string>$(PRODUCT_NAME) saves received photos to your gallery.</string>
 </dict>
 </plist>

@@ -32,6 +32,8 @@ dependencies:
 
   ffmpeg_kit_flutter_new: ^4.1.0
 
+  flutter_svg: ^2.2.3
+
   flutter_localizations:
     sdk: flutter
   intl: 0.20.2
@@ -45,3 +47,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - ios/

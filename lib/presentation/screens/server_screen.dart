@@ -129,7 +129,7 @@ class _ServerScreenState extends State<ServerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_showProgress ? 'Отправка файлов' : 'Сервер'),
+        title: Text(_showProgress ? 'Sending files' : 'Send file'),
         backgroundColor: Colors.green,
         leading: _showProgress
             ? IconButton(
@@ -165,15 +165,11 @@ class _ServerScreenState extends State<ServerScreen> {
                 child: Column(
                   children: [
                     Text(
-                      hasClients
-                          ? 'Клиент подключен!'
-                          : 'Сканируйте QR-код на клиенте',
+                      'Tap Receive and scan the QR code on the sending device to get the files',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: hasClients ? Colors.green : Colors.green,
                       ),
-                      textAlign: TextAlign.center,
                     ),
                     SizedBox(height: 20),
 
@@ -184,154 +180,6 @@ class _ServerScreenState extends State<ServerScreen> {
                       size: 250,
                       backgroundColor: Colors.white,
                     ),
-
-                    SizedBox(height: 20),
-
-                    // Информация о сервере
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.info, color: Colors.green, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'Информация о сервере:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Статус: ${service.status}',
-                            style: TextStyle(fontSize: 14),
-                          ),
-                          SizedBox(height: 4),
-                          SelectableText(
-                            'IP: ${service.localIp}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Порт: ${FileTransferService.PORT}',
-                            style: TextStyle(fontSize: 14),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            hasClients
-                                ? '✅ Клиент подключен'
-                                : '⏳ Ожидание подключения...',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: hasClients ? Colors.green : Colors.orange,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    SizedBox(height: 20),
-
-                    // Индикатор/статус подключения
-                    if (hasClients)
-                      Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.check_circle,
-                                  color: Colors.green,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Подключение установлено!',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 12),
-                            if (_isSending)
-                              Column(
-                                children: [
-                                  CircularProgressIndicator(),
-                                  SizedBox(height: 16),
-                                  Text(
-                                    'Автоматический выбор файлов...',
-                                    style: TextStyle(
-                                      color: Colors.green,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            else
-                              Text(
-                                'Автоматически открывается выбор файлов...',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[700],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.help, color: Colors.blue, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Как подключиться:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              '1. Откройте приложение на другом устройстве\n'
-                              '2. Нажмите "Подключиться"\n'
-                              '3. Наведите камеру на этот QR-код\n'
-                              '4. Подключение произойдет автоматически',
-                              style: TextStyle(fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      ),
                   ],
                 ),
               ),
