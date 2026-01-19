@@ -52,3 +52,13 @@ flutter:
     - assets/images/
     - assets/icons/
     - ios/
+
+  fonts:
+    - family: Morn
+      fonts:
+        - asset: assets/fonts/morn-light.ttf
+          weight: 300
+        - asset: assets/fonts/morn-regular.ttf
+          weight: 400
+        - asset: assets/fonts/morn-medium.ttf
+          weight: 500

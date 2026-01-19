@@ -1,19 +1,21 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:local_file_transfer/core/core.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../presentation.dart';
 
-class RoleSelectionScreen extends StatefulWidget {
-  const RoleSelectionScreen({super.key});
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
 
   @override
-  State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-class _RoleSelectionScreenState extends State<RoleSelectionScreen>
-    with WidgetsBindingObserver {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _isCheckingPermissions = false;
   bool _permissionsChecked = false;
 
@@ -40,7 +42,19 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Local File Transfer'), centerTitle: true),
+      appBar: CustomAppBar(
+        title: 'Copy data',
+        automaticallyImplyLeading: false,
+        actions: [
+          CustomIconButton(
+            onPressed: () {},
+            icon: SvgPicture.asset(
+              'assets/icons/setting.svg',
+              colorFilter: ColorFilter.mode(AppColors.black, BlendMode.srcIn),
+            ),
+          ),
+        ],
+      ),
       body: _buildBody(),
     );
   }

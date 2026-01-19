@@ -162,27 +162,28 @@ class _ClientScreenState extends State<ClientScreen> {
 
         // Верхняя панель
         SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Transform.scale(
-                scale: 1.5,
-                child: CupertinoButton(
-                  onPressed: () => Navigator.pop(context),
-                  padding: EdgeInsets.only(left: 8.0),
-                  child: SvgPicture.asset(
-                    'assets/icons/cross.svg',
-                    width: 20.0,
-                    height: 20.0,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Transform.scale(
+                  scale: 1.5,
+                  child: CustomIconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: SvgPicture.asset(
+                      'assets/icons/cross.svg',
+                      width: 20.0,
+                      height: 20.0,
+                    ),
                   ),
                 ),
-              ),
-              CupertinoButton(
-                onPressed: () => _qrController?.toggleFlash(),
-                padding: EdgeInsets.only(right: 8.0),
-                child: SvgPicture.asset('assets/icons/flash.svg'),
-              ),
-            ],
+                CustomIconButton(
+                  onPressed: () => _qrController?.toggleFlash(),
+                  icon: SvgPicture.asset('assets/icons/flash.svg'),
+                ),
+              ],
+            ),
           ),
         ),
       ],
