@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/core.dart';
-import '../presentation.dart';
 
 class ClientScreen extends StatefulWidget {
   const ClientScreen({super.key});
@@ -16,18 +15,7 @@ class ClientScreen extends StatefulWidget {
 class _ClientScreenState extends State<ClientScreen> {
   final TextEditingController _ipController = TextEditingController();
   bool _isConnecting = false;
-  bool _showScanner = false;
   bool _isSending = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _ipController.addListener(_onIpChanged);
-  }
-
-  void _onIpChanged() {
-    setState(() {});
-  }
 
   Future<void> _connectToServer() async {
     if (_ipController.text.isEmpty) return;
@@ -54,7 +42,7 @@ class _ClientScreenState extends State<ClientScreen> {
     }
   }
 
-  Future<void> _sendFilesToServer(List<File> files) async {
+  Future<void> _pickAndSendMedia() async {
     final service = Provider.of<FileTransferService>(context, listen: false);
 
     if (!service.isConnected) {
@@ -69,15 +57,24 @@ class _ClientScreenState extends State<ClientScreen> {
     setState(() => _isSending = true);
 
     try {
-      await service.sendFiles(files);
+      final pickedFiles = await ImagePicker().pickMultipleMedia();
+      final files = <File>[];
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${files.length} файл(ов) отправлено'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+      for (final image in pickedFiles) {
+        files.add(File(image.path));
+      }
+
+      if (files.isNotEmpty) {
+        await service.sendFilesToConnectedClient(files);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${files.length} файл(ов) отправлено'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -93,40 +90,6 @@ class _ClientScreenState extends State<ClientScreen> {
     }
   }
 
-  Future<void> _pickAndSendMedia() async {
-    final service = Provider.of<FileTransferService>(context, listen: false);
-
-    if (!service.isConnected) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Сначала подключитесь к серверу')),
-        );
-      }
-      return;
-    }
-
-    try {
-      final pickedFiles = await ImagePicker().pickMultipleMedia();
-      final files = <File>[];
-
-      for (final image in pickedFiles) {
-        files.add(File(image.path));
-      }
-
-      if (files.isNotEmpty) {
-        await _sendFilesToServer(files);
-      }
-    } catch (e) {
-      print('Ошибка выбора файлов: $e');
-    }
-  }
-
-  void _toggleScanner() {
-    setState(() {
-      _showScanner = !_showScanner;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<FileTransferService>(context);
@@ -134,7 +97,8 @@ class _ClientScreenState extends State<ClientScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(service.status),
+        title: Text('Клиент'),
+        backgroundColor: Colors.blue,
         actions: [
           if (isConnected)
             IconButton(
@@ -151,103 +115,63 @@ class _ClientScreenState extends State<ClientScreen> {
               onPressed: _isSending ? null : _pickAndSendMedia,
               tooltip: 'Отправить файлы',
             ),
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: () {
-              setState(() {});
-            },
-            tooltip: 'Обновить',
-          ),
         ],
       ),
-      body: _showScanner
-          ? _buildQrScanner()
-          : _buildMainContent(service, isConnected),
+      body: _buildMainContent(service, isConnected),
     );
   }
 
   Widget _buildMainContent(FileTransferService service, bool isConnected) {
     return Column(
       children: [
-        // Подключение к серверу
+        // Поле ввода IP адреса и кнопка подключения
         Card(
-          margin: EdgeInsets.all(8),
+          margin: EdgeInsets.all(12),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _ipController,
-                        decoration: InputDecoration(
-                          labelText: 'IP адрес сервера',
-                          hintText: '192.168.1.100',
-                          prefixIcon: Icon(Icons.wifi),
-                          border: OutlineInputBorder(),
-                          suffixIcon: _ipController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(Icons.clear),
-                                  onPressed: () => _ipController.clear(),
-                                )
-                              : null,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 10),
-                    IconButton(
-                      icon: Icon(Icons.qr_code_scanner),
-                      onPressed: _toggleScanner,
-                      tooltip: 'Сканировать QR',
-                    ),
-                  ],
+                TextField(
+                  controller: _ipController,
+                  decoration: InputDecoration(
+                    labelText: 'IP адрес сервера',
+                    hintText: '192.168.1.100',
+                    prefixIcon: Icon(Icons.wifi),
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-                SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: _isConnecting
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Icon(isConnected ? Icons.check : Icons.link),
-                        label: Text(
-                          _isConnecting
-                              ? 'Подключение...'
-                              : isConnected
-                              ? 'Подключено'
-                              : 'Подключиться',
-                        ),
-                        onPressed: _isConnecting ? null : _connectToServer,
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: Size(double.infinity, 50),
-                        ),
-                      ),
-                    ),
-                  ],
+                SizedBox(height: 12),
+                ElevatedButton.icon(
+                  icon: _isConnecting
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(isConnected ? Icons.check : Icons.link),
+                  label: Text(
+                    _isConnecting
+                        ? 'Подключение...'
+                        : isConnected
+                        ? 'Подключено'
+                        : 'Подключиться',
+                  ),
+                  onPressed: _isConnecting ? null : _connectToServer,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 50),
+                  ),
                 ),
               ],
             ),
           ),
         ),
 
-        SizedBox(height: 10),
+        SizedBox(height: 8),
 
-        // Кнопка отправки
-        if (isConnected) _buildQuickActions(),
-
-        SizedBox(height: 10),
-
-        // Прогресс бары для фото и видео
+        // Прогресс бары для приема файлов от сервера
         _buildProgressBars(service),
 
-        // Добавим место для скролла, если контент не помещается
+        // Добавляем Flexible чтобы прогресс бары занимали оставшееся место
         Expanded(child: Container()),
       ],
     );
@@ -277,18 +201,18 @@ class _ClientScreenState extends State<ClientScreen> {
     final hasActiveTransfers = photoProgress > 0 || videoProgress > 0;
 
     if (!hasActiveTransfers) {
-      return SizedBox.shrink(); // Не показываем, если нет активных передач
+      return SizedBox.shrink();
     }
 
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8),
+      margin: EdgeInsets.symmetric(horizontal: 12),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Прогресс передачи:',
+              'Прогресс получения файлов:',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             SizedBox(height: 12),
@@ -366,21 +290,14 @@ class _ClientScreenState extends State<ClientScreen> {
         SizedBox(height: 4),
         LinearProgressIndicator(
           value: progress / 100,
-          backgroundColor: color.withValues(alpha: 0.2),
+          backgroundColor: color.withOpacity(0.2),
           valueColor: AlwaysStoppedAnimation<Color>(color),
           minHeight: 6,
         ),
         SizedBox(height: 4),
-        // Строка с прогрессом в байтах
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                progressText,
-                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-              ),
-            ),
-          ],
+        Text(
+          progressText,
+          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
         ),
       ],
     );
@@ -419,82 +336,6 @@ class _ClientScreenState extends State<ClientScreen> {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
-
-  Widget _buildQuickActions() {
-    return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Отправка файлов:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    icon: _isSending
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Icon(Icons.photo, size: 20),
-                    label: Text(_isSending ? 'Отправка...' : 'Выбрать файлы'),
-                    onPressed: _isSending ? null : _pickAndSendMedia,
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQrScanner() {
-    return Column(
-      children: [
-        AppBar(
-          title: Text('Сканирование QR'),
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back),
-            onPressed: _toggleScanner,
-          ),
-        ),
-        Expanded(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.qr_code_scanner, size: 100, color: Colors.grey[300]),
-                SizedBox(height: 20),
-                Text('QR сканер в разработке', style: TextStyle(fontSize: 18)),
-                SizedBox(height: 10),
-                ElevatedButton(
-                  onPressed: _toggleScanner,
-                  child: Text('Вернуться'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   @override

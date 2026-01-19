@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/core.dart';
 
 class ServerScreen extends StatefulWidget {
@@ -10,7 +13,7 @@ class ServerScreen extends StatefulWidget {
 }
 
 class _ServerScreenState extends State<ServerScreen> {
-  bool _showQR = false;
+  bool _isSending = false;
 
   @override
   void initState() {
@@ -27,6 +30,54 @@ class _ServerScreenState extends State<ServerScreen> {
     }
   }
 
+  Future<void> _pickAndSendMedia() async {
+    final service = Provider.of<FileTransferService>(context, listen: false);
+
+    if (service.connectedClients.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Нет подключенных клиентов')));
+      }
+      return;
+    }
+
+    setState(() => _isSending = true);
+
+    try {
+      final pickedFiles = await ImagePicker().pickMultipleMedia();
+      final files = <File>[];
+
+      for (final image in pickedFiles) {
+        files.add(File(image.path));
+      }
+
+      if (files.isNotEmpty) {
+        await service.sendFilesToConnectedClient(files);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${files.length} файл(ов) отправлено клиенту'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка отправки: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isSending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<FileTransferService>(context);
@@ -34,51 +85,47 @@ class _ServerScreenState extends State<ServerScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Сервер'),
+        backgroundColor: Colors.green,
         actions: [
           IconButton(
-            icon: Icon(Icons.qr_code),
-            onPressed: () => setState(() => _showQR = !_showQR),
-            tooltip: 'Показать QR код',
+            icon: _isSending
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(Icons.send),
+            onPressed: _isSending ? null : _pickAndSendMedia,
+            tooltip: 'Отправить файлы клиенту',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Статус сервера
-          _buildStatusCard(service),
+          // Поле с IP адресом сервера
+          _buildServerInfoCard(service),
 
-          SizedBox(height: 10),
+          SizedBox(height: 8),
 
-          // Прогресс бары для принимаемых файлов
+          // Прогресс бары для отправки файлов клиенту
           _buildProgressBars(service),
+
+          Expanded(child: Container()),
         ],
       ),
     );
   }
 
-  Widget _buildStatusCard(FileTransferService service) {
-    final hasActiveTransfers = service.activeTransfers.isNotEmpty;
-
-    // Считаем общий прогресс всех передач
-    int totalBytesReceived = 0;
-    int totalBytes = 0;
-
-    if (hasActiveTransfers) {
-      for (final transfer in service.activeTransfers.values) {
-        totalBytesReceived += transfer.receivedBytes;
-        totalBytes += transfer.fileSize;
-      }
-    }
-
-    final totalProgress = totalBytes > 0
-        ? (totalBytesReceived / totalBytes * 100)
-        : 0;
-
+  Widget _buildServerInfoCard(FileTransferService service) {
     return Card(
-      margin: EdgeInsets.all(8),
+      margin: EdgeInsets.all(12),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -105,7 +152,7 @@ class _ServerScreenState extends State<ServerScreen> {
                           children: [
                             SizedBox(height: 4),
                             Text(
-                              'WebSocket URL:',
+                              'IP адрес сервера:',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey,
@@ -113,68 +160,28 @@ class _ServerScreenState extends State<ServerScreen> {
                             ),
                             SizedBox(height: 2),
                             SelectableText(
-                              'ws://${service.localIp}:${FileTransferService.PORT}/ws',
+                              service.localIp,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Порт: ${FileTransferService.PORT}',
                               style: TextStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
+                                color: Colors.grey,
                               ),
                             ),
                           ],
                         ),
-                      if (hasActiveTransfers) SizedBox(height: 4),
-                      if (hasActiveTransfers)
-                        Text(
-                          'Общий прогресс приема: ${_formatBytes(totalBytesReceived)} / ${_formatBytes(totalBytes)} (${totalProgress.toStringAsFixed(1)}%)',
-                          style: TextStyle(fontSize: 11, color: Colors.blue),
-                        ),
                     ],
                   ),
                 ),
-                Chip(
-                  label: Text(
-                    service.isServerRunning ? 'АКТИВЕН' : 'ОСТАНОВЛЕН',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  backgroundColor: service.isServerRunning
-                      ? Colors.green
-                      : Colors.red,
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                ),
               ],
             ),
-            if (service.isServerRunning) ...[
-              SizedBox(height: 12),
-              Divider(height: 1),
-              SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem(
-                    Icons.cloud_download,
-                    'Активных передач',
-                    service.activeTransfers.length.toString(),
-                    Colors.orange,
-                  ),
-                  _buildStatItem(
-                    Icons.storage,
-                    'Получено файлов',
-                    service.receivedMedia.length.toString(),
-                    Colors.purple,
-                  ),
-                  _buildStatItem(
-                    Icons.memory,
-                    'Порт',
-                    FileTransferService.PORT.toString(),
-                    Colors.blue,
-                  ),
-                ],
-              ),
-            ],
           ],
         ),
       ),
@@ -204,19 +211,19 @@ class _ServerScreenState extends State<ServerScreen> {
     // Показываем только если есть активные передачи
     final hasActiveTransfers = photoProgress > 0 || videoProgress > 0;
 
-    // if (!hasActiveTransfers) {
-    //   return SizedBox.shrink();
-    // }
+    if (!hasActiveTransfers) {
+      return SizedBox.shrink();
+    }
 
     return Card(
-      margin: EdgeInsets.symmetric(horizontal: 8),
+      margin: EdgeInsets.symmetric(horizontal: 12),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Прогресс приема файлов:',
+              'Прогресс отправки файлов:',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             SizedBox(height: 12),
@@ -294,132 +301,23 @@ class _ServerScreenState extends State<ServerScreen> {
         SizedBox(height: 4),
         LinearProgressIndicator(
           value: progress / 100,
-          backgroundColor: color.withValues(alpha: 0.2),
+          backgroundColor: color.withOpacity(0.2),
           valueColor: AlwaysStoppedAnimation<Color>(color),
           minHeight: 6,
         ),
         SizedBox(height: 4),
-        // Строка с прогрессом в байтах
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                progressText,
-                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-              ),
-            ),
-          ],
+        Text(
+          progressText,
+          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
         ),
       ],
     );
   }
 
-  Widget _buildTransferItem(FileTransfer transfer) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 8),
-      padding: EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                transfer.fileType.startsWith('image/')
-                    ? Icons.photo
-                    : Icons.videocam,
-                size: 16,
-                color: transfer.fileType.startsWith('image/')
-                    ? Colors.blue
-                    : Colors.green,
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  transfer.fileName,
-                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                '${transfer.progress.toStringAsFixed(1)}%',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                  color: transfer.fileType.startsWith('image/')
-                      ? Colors.blue
-                      : Colors.green,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 4),
-          LinearProgressIndicator(
-            value: transfer.progress / 100,
-            backgroundColor: transfer.fileType.startsWith('image/')
-                ? Colors.blue.withValues(alpha: 0.2)
-                : Colors.green.withValues(alpha: 0.2),
-            valueColor: AlwaysStoppedAnimation<Color>(
-              transfer.fileType.startsWith('image/')
-                  ? Colors.blue
-                  : Colors.green,
-            ),
-            minHeight: 4,
-          ),
-          SizedBox(height: 4),
-          Text(
-            '${_formatBytes(transfer.receivedBytes)} / ${_formatBytes(transfer.fileSize)}',
-            style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(
-    IconData icon,
-    String label,
-    String value,
-    Color color,
-  ) {
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 20, color: color),
-        ),
-        SizedBox(height: 6),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: color,
-          ),
-        ),
-        SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(fontSize: 10, color: Colors.grey),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  // Вспомогательные методы для форматирования
   String _getProgressText(List<FileTransfer> transfers) {
     if (transfers.isEmpty) return '';
 
-    // Для групповых передач
+    // Для групповых передач (image/mixed или video/mixed)
     if (transfers.length == 1 && transfers.first.totalFiles > 1) {
       final transfer = transfers.first;
       return '${transfer.progressSizeFormatted} • ${transfer.completedFiles}/${transfer.totalFiles} файлов';
@@ -449,18 +347,6 @@ class _ServerScreenState extends State<ServerScreen> {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inMinutes < 1) return 'только что';
-    if (difference.inHours < 1) return '${difference.inMinutes} мин назад';
-    if (difference.inDays < 1) return '${difference.inHours} час назад';
-    if (difference.inDays < 7) return '${difference.inDays} дн назад';
-
-    return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
   }
 
   @override
