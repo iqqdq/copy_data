@@ -28,6 +28,19 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     try {
       print('🔐 Проверка разрешений...');
 
+      // ДОБАВИТЬ: Запрос разрешения на камеру
+      if (Platform.isAndroid || Platform.isIOS) {
+        print('📷 Запрашиваю разрешение на камеру...');
+        var cameraStatus = await Permission.camera.status;
+
+        if (!cameraStatus.isGranted) {
+          print('📷 Камера: Разрешение не предоставлено, запрашиваю...');
+          cameraStatus = await Permission.camera.request();
+        }
+
+        print('📷 Камера: Разрешение ${cameraStatus.isGranted ? "✅" : "❌"}');
+      }
+
       if (Platform.isAndroid) {
         // Для Android
         var status = await Permission.storage.status;

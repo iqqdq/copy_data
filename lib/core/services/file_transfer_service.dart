@@ -314,6 +314,8 @@ class FileTransferService extends ChangeNotifier {
         'timestamp': DateTime.now().toIso8601String(),
       }),
     );
+
+    notifyListeners();
   }
 
   void _handleChunkAckFromClient(WebSocket socket, Map<String, dynamic> data) {
@@ -883,6 +885,48 @@ class FileTransferService extends ChangeNotifier {
       socket.add(jsonEncode(progressMessage));
     } catch (e) {
       print('❌ Ошибка отправки прогресса клиенту: $e');
+    }
+  }
+
+  // Добавьте этот метод в класс FileTransferService
+  Future<void> cancelTransfer(String transferId) async {
+    try {
+      print('🛑 Отмена передачи: $transferId');
+
+      // Находим передачу
+      final transfer = _activeTransfers[transferId];
+      if (transfer == null) {
+        print('⚠️ Передача не найдена: $transferId');
+        return;
+      }
+
+      // Закрываем WebSocket соединение если нужно
+      if (_connectedClients.isNotEmpty) {
+        final cancelMessage = {
+          'type': 'cancel_transfer',
+          'transferId': transferId,
+          'timestamp': DateTime.now().toIso8601String(),
+        };
+
+        // Отправляем сообщение об отмене
+        for (final client in _connectedClients) {
+          try {
+            client.add(jsonEncode(cancelMessage));
+          } catch (e) {
+            print('⚠️ Ошибка отправки отмены: $e');
+          }
+        }
+      }
+
+      // Удаляем передачу
+      _activeTransfers.remove(transferId);
+
+      // Уведомляем UI
+      notifyListeners();
+
+      print('✅ Передача отменена: $transferId');
+    } catch (e) {
+      print('❌ Ошибка при отмене передачи: $e');
     }
   }
 

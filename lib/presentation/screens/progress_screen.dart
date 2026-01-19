@@ -1,0 +1,382 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/core.dart';
+
+class ProgressScreen extends StatefulWidget {
+  final bool isSending; // true = отправка (сервер), false = получение (клиент)
+
+  const ProgressScreen({super.key, required this.isSending});
+
+  @override
+  State<ProgressScreen> createState() => _ProgressScreenState();
+}
+
+class _ProgressScreenState extends State<ProgressScreen> {
+  bool _showGoToMainMenu = false;
+  final Map<String, bool> _cancelledTransfers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForCompletedTransfers();
+  }
+
+  void _checkForCompletedTransfers() {
+    final service = Provider.of<FileTransferService>(context, listen: false);
+    final transfers = service.activeTransfers.values.toList();
+
+    if (transfers.isEmpty) {
+      _showGoToMainMenu = true;
+    } else {
+      final allCompleted = transfers.every((t) => t.progress >= 100);
+      _showGoToMainMenu = allCompleted;
+    }
+  }
+
+  void _cancelTransfer({
+    required FileTransferService service,
+    required String transferId,
+  }) async {
+    setState(() {
+      _cancelledTransfers[transferId] = true;
+    });
+
+    await service.cancelTransfer(transferId);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(widget.isSending ? 'Отправка отменена' : 'Прием отменен'),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = Provider.of<FileTransferService>(context);
+    final transfers = service.activeTransfers.values.toList();
+
+    // Проверяем завершение передач при каждом обновлении
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final allCompleted =
+          transfers.isNotEmpty && transfers.every((t) => t.progress >= 100);
+      if (allCompleted && !_showGoToMainMenu) {
+        setState(() {
+          _showGoToMainMenu = true;
+        });
+      }
+    });
+
+    if (transfers.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              widget.isSending ? Icons.upload : Icons.download,
+              size: 64,
+              color: Colors.grey,
+            ),
+            SizedBox(height: 16),
+            Text(
+              widget.isSending
+                  ? 'Файлы для отправки не выбраны'
+                  : 'Ожидание файлов от сервера',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            SizedBox(height: 8),
+            if (widget.isSending)
+              Text(
+                'Нажмите кнопку отправки в правом верхнем углу',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+            SizedBox(height: 32),
+            if (_showGoToMainMenu) _buildGoToMainMenuButton(),
+          ],
+        ),
+      );
+    }
+
+    // Группируем по типу
+    final photoTransfers = transfers
+        .where(
+          (t) => t.fileType.startsWith('image/') || t.fileType == 'image/mixed',
+        )
+        .toList();
+
+    final videoTransfers = transfers
+        .where(
+          (t) => t.fileType.startsWith('video/') || t.fileType == 'video/mixed',
+        )
+        .toList();
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  // Карточка для фото
+                  if (photoTransfers.isNotEmpty)
+                    _buildTransferCard(
+                      service: service,
+                      transfers: photoTransfers,
+                      icon: Icons.photo,
+                      label: 'Фотографии',
+                      color: Colors.blue,
+                      isPhoto: true,
+                    ),
+
+                  SizedBox(height: 16),
+
+                  // Карточка для видео
+                  if (videoTransfers.isNotEmpty)
+                    _buildTransferCard(
+                      service: service,
+                      transfers: videoTransfers,
+                      icon: Icons.videocam,
+                      label: 'Видео',
+                      color: Colors.green,
+                      isPhoto: false,
+                    ),
+
+                  if (photoTransfers.isEmpty && videoTransfers.isEmpty)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Center(
+                          child: Text(
+                            'Нет активных передач',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // Кнопка перехода в главное меню
+        if (_showGoToMainMenu)
+          Container(
+            padding: EdgeInsets.all(16),
+            color: Colors.grey[100],
+            child: _buildGoToMainMenuButton(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTransferCard({
+    required FileTransferService service,
+    required List<FileTransfer> transfers,
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool isPhoto,
+  }) {
+    final progress = _calculateAverageProgress(transfers);
+    final count = transfers.first.totalFiles;
+    final transferId = transfers.first.transferId;
+    final isCancelled = _cancelledTransfers[transferId] ?? false;
+
+    return Card(
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Заголовок и прогресс
+            Row(
+              children: [
+                Icon(icon, color: color, size: 24),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$label ($count файл${_getPluralEnding(count)})',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        '${progress.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (progress < 100 && !isCancelled)
+                  Icon(
+                    widget.isSending ? Icons.upload : Icons.download,
+                    color: color.withOpacity(0.7),
+                  ),
+                if (isCancelled) Icon(Icons.cancel, color: Colors.red),
+              ],
+            ),
+
+            SizedBox(height: 12),
+
+            // Прогресс бар
+            LinearProgressIndicator(
+              value: progress / 100,
+              backgroundColor: color.withOpacity(0.2),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                isCancelled ? Colors.grey : color,
+              ),
+              minHeight: 8,
+            ),
+
+            SizedBox(height: 8),
+
+            // Детали прогресса
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    _getProgressText(transfers),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ),
+                if (isCancelled)
+                  Text(
+                    'Отменено',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+              ],
+            ),
+
+            SizedBox(height: 16),
+
+            // Кнопка отмены (показываем только если передача не завершена и не отменена)
+            if (progress < 100 && !isCancelled)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: Icon(Icons.cancel, size: 20),
+                  label: Text(
+                    widget.isSending ? 'Cancel sending' : 'Cancel receiving',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.withOpacity(0.1),
+                    foregroundColor: Colors.red,
+                    side: BorderSide(color: Colors.red.withOpacity(0.3)),
+                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  ),
+                  onPressed: () {
+                    _cancelTransfer(service: service, transferId: transferId);
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoToMainMenuButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        icon: Icon(Icons.home, size: 24),
+        label: Text(
+          'В главное меню',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+          padding: EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        onPressed: () {
+          // Навигация в главное меню
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        },
+      ),
+    );
+  }
+
+  double _calculateAverageProgress(List<FileTransfer> transfers) {
+    if (transfers.isEmpty) return 0.0;
+    final total = transfers.fold(
+      0.0,
+      (sum, transfer) => sum + transfer.progress,
+    );
+    return total / transfers.length;
+  }
+
+  String _getPluralEnding(int count) {
+    if (count % 10 == 1 && count % 100 != 11) return '';
+    if (count % 10 >= 2 &&
+        count % 10 <= 4 &&
+        (count % 100 < 10 || count % 100 >= 20)) {
+      return 'а';
+    }
+    return 'ов';
+  }
+
+  String _getProgressText(List<FileTransfer> transfers) {
+    // Для групповых передач (image/mixed или video/mixed)
+    if (transfers.length == 1 && transfers.first.totalFiles > 1) {
+      final transfer = transfers.first;
+      final completed = transfer.completedFiles;
+      final total = transfer.totalFiles;
+      return '${transfer.progressSizeFormatted} • $completed/$total файлов';
+    }
+
+    // Для одиночных файлов
+    int totalReceived = 0;
+    int totalSize = 0;
+    int completed = 0;
+    int total = transfers.length;
+
+    for (final transfer in transfers) {
+      totalReceived += transfer.receivedBytes;
+      totalSize += transfer.fileSize;
+      if (transfer.progress >= 100) completed++;
+    }
+
+    return '${_formatBytes(totalReceived, totalSize)} • $completed/$total файлов';
+  }
+
+  String _formatBytes(int bytes, int totalBytes) {
+    // Синхронизируем единицы измерения на основе общего размера
+    if (totalBytes >= 1024 * 1024) {
+      final bytesMB = bytes / (1024 * 1024);
+      final totalMB = totalBytes / (1024 * 1024);
+      return '${bytesMB.toStringAsFixed(2)} / ${totalMB.toStringAsFixed(2)} MB';
+    } else if (totalBytes >= 1024) {
+      final bytesKB = bytes / 1024;
+      final totalKB = totalBytes / 1024;
+      return '${bytesKB.toStringAsFixed(2)} / ${totalKB.toStringAsFixed(2)} KB';
+    } else {
+      return '$bytes / $totalBytes B';
+    }
+  }
+}
