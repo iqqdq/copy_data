@@ -117,6 +117,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           selectedIndex: _selectedIndex,
           onTabSelected: (index) => setState(() => _selectedIndex = index),
         ),
+
         //   Expanded(
         //     child: IndexedStack(
         //       index: _selectedIndex,
@@ -130,6 +131,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         //   ),
         // ],
         // ),
+        CustomButton(title: 'title', isLoading: false, onPressed: () {}),
       ],
     );
   }

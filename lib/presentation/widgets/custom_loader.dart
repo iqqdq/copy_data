@@ -10,7 +10,7 @@ class CustomLoader extends StatefulWidget {
   const CustomLoader({
     super.key,
     this.animationDuration = const Duration(milliseconds: 500),
-    this.circleSize = 8.0,
+    this.circleSize = 10.0,
     this.jumpHeight = 12.0,
   });
 
