@@ -17,6 +17,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _isCheckingPermissions = false;
   bool _permissionsChecked = false;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -106,6 +107,29 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             );
           },
         ),
+
+        const SizedBox(height: 32.0),
+
+        // Column(
+        //   children: [
+        CustomTabBar(
+          tabs: ['Transfer to IOS', 'Transfer to Android'],
+          selectedIndex: _selectedIndex,
+          onTabSelected: (index) => setState(() => _selectedIndex = index),
+        ),
+        //   Expanded(
+        //     child: IndexedStack(
+        //       index: _selectedIndex,
+        //       children: [
+        //         Center(child: Text('Content 1')),
+        //         Center(child: Text('Content 2')),
+        //         Center(child: Text('Content 3')),
+        //         Center(child: Text('Content 4')),
+        //       ],
+        //     ),
+        //   ),
+        // ],
+        // ),
       ],
     );
   }
