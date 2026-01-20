@@ -138,7 +138,7 @@ class _CustomButtonState extends State<CustomButton> {
         color: effectiveColor,
         borderRadius: BorderRadius.circular(500),
         border: hasBorder
-            ? Border.all(color: widget.borderColor, width: 3)
+            ? Border.all(color: widget.borderColor, width: 3.0)
             : null,
         boxShadow: hasShadow
             ? [

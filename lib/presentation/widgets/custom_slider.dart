@@ -99,7 +99,7 @@ class _StaticRectangle extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.accent,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.black, width: 2),
+        border: Border.all(color: AppColors.black, width: 2.0),
       ),
     );
   }
@@ -116,7 +116,7 @@ class _StaticCircle extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.black, width: 2),
+        border: Border.all(color: AppColors.black, width: 2.0),
       ),
     );
   }
@@ -151,7 +151,7 @@ class _CircleToRectangleTransition extends AnimatedWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.black, width: 2),
+        border: Border.all(color: AppColors.black, width: 2.0),
       ),
     );
   }

@@ -82,27 +82,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               vertical: 8.0,
             ),
             children: [
-              /// Кнопка сервера
-              _buildRoleButton(
-                context,
-                icon: Icons.wifi,
-                title: 'Send file',
-                subtitle:
-                    'Choose files and share them instantly with nearby devices',
-                color: Colors.blue,
-                onTap: () => _handleRoleSelection(0),
+              Padding(
+                padding: EdgeInsets.only(bottom: 32.0),
+                child: MainTile.send(onPressed: () => _handleRoleSelection(0)),
               ),
-              const SizedBox(height: 32.0),
 
-              /// Кнопка клиента
-              _buildRoleButton(
-                context,
-                icon: Icons.phone_android,
-                title: 'Receive file',
-                subtitle: 'Receive files fast and safely from other devices',
-                color: Colors.green,
-                onTap: () => _handleRoleSelection(1),
-              ),
+              MainTile.receive(onPressed: () => _handleRoleSelection(1)),
             ],
           ),
         ),
@@ -128,7 +113,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     if (!allGranted) {
       // Если не все разрешения получены, показываем алерт
-      // Находим первый неподтвержденный разрешение
+      // Находим первое неподтвержденный разрешение
       int firstDeniedIndex = _permissionStates.indexWhere((state) => !state);
       setState(() {
         _currentPermissionIndex = firstDeniedIndex;
@@ -138,16 +123,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
 
     // Если все разрешения получены, переходим к экрану
-    if (roleIndex == 0) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => ServerScreen()),
-      );
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => ClientScreen()),
-      );
+    if (mounted) {
+      if (roleIndex == 0) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ServerScreen()),
+        );
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => ClientScreen()),
+        );
+      }
     }
   }
 
@@ -426,66 +413,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             child: Text('Open Settings'),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildRoleButton(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      borderRadius: BorderRadius.circular(15),
-      elevation: 4,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(15),
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 32, color: color),
-              ),
-              SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right, color: color),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/core.dart';
+
 import 'presentation/presentation.dart';
 
 class App extends StatelessWidget {
@@ -7,6 +9,10 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(debugShowCheckedModeBanner: false, home: MainScreen());
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(scaffoldBackgroundColor: AppColors.white),
+      home: MainScreen(),
+    );
   }
 }

@@ -35,7 +35,7 @@ class PermissionAlert extends StatelessWidget {
             padding: EdgeInsets.all(24.0).copyWith(bottom: 8.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(32.0),
-              border: Border.all(color: AppColors.black, width: 3),
+              border: Border.all(color: AppColors.black, width: 3.0),
               color: AppColors.white,
             ),
             child: Column(
