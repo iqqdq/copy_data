@@ -131,7 +131,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         //   ),
         // ],
         // ),
-        CustomButton(title: 'title', isLoading: false, onPressed: () {}),
+        CustomButton.transparent(title: 'title', onPressed: () {}),
       ],
     );
   }

@@ -7,17 +7,78 @@ import '../../core/core.dart';
 
 class CustomButton extends StatefulWidget {
   final String title;
-  final bool isPrimary;
   final bool isLoading;
   final VoidCallback? onPressed;
 
-  const CustomButton({
+  const CustomButton._internal({
     super.key,
     required this.title,
-    this.isPrimary = true,
+    required this.color,
+    required this.textColor,
+    required this.borderColor,
+    required this.shadowColor,
     this.isLoading = false,
     this.onPressed,
   });
+
+  final Color color;
+  final Color textColor;
+  final Color borderColor;
+  final Color shadowColor;
+
+  factory CustomButton.primary({
+    Key? key,
+    required String title,
+    bool isLoading = false,
+    VoidCallback? onPressed,
+  }) {
+    return CustomButton._internal(
+      key: key,
+      title: title,
+      color: AppColors.white,
+      textColor: AppColors.black,
+      borderColor: AppColors.black,
+      shadowColor: AppColors.black,
+      isLoading: isLoading,
+      onPressed: onPressed,
+    );
+  }
+
+  factory CustomButton.secondary({
+    Key? key,
+    required String title,
+    bool isLoading = false,
+    VoidCallback? onPressed,
+  }) {
+    return CustomButton._internal(
+      key: key,
+      title: title,
+      color: AppColors.lightBlue,
+      textColor: AppColors.black,
+      borderColor: AppColors.black,
+      shadowColor: AppColors.black,
+      isLoading: isLoading,
+      onPressed: onPressed,
+    );
+  }
+
+  factory CustomButton.transparent({
+    Key? key,
+    required String title,
+
+    required VoidCallback onPressed,
+  }) {
+    return CustomButton._internal(
+      key: key,
+      title: title,
+      color: Colors.transparent,
+      textColor: AppColors.black,
+      borderColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      isLoading: false,
+      onPressed: onPressed,
+    );
+  }
 
   @override
   State<CustomButton> createState() => _CustomButtonState();
@@ -54,6 +115,15 @@ class _CustomButtonState extends State<CustomButton> {
 
   @override
   Widget build(BuildContext context) {
+    final isDisabled = widget.onPressed == null;
+    final effectiveTextColor = isDisabled
+        ? AppColors.lightGray
+        : widget.textColor;
+    final effectiveColor = isDisabled ? AppColors.extraLightGray : widget.color;
+
+    final hasBorder = widget.borderColor != Colors.transparent;
+    final hasShadow = widget.shadowColor != Colors.transparent && !_isPressed;
+
     final child = AnimatedContainer(
       duration: const Duration(milliseconds: 100),
       curve: Curves.easeInOut,
@@ -64,23 +134,21 @@ class _CustomButtonState extends State<CustomButton> {
         0,
       ),
       decoration: BoxDecoration(
-        color: widget.onPressed == null
-            ? AppColors.extraLightGray
-            : widget.isPrimary
-            ? AppColors.white
-            : AppColors.lightBlue,
+        color: effectiveColor,
         borderRadius: BorderRadius.circular(500),
-        border: Border.all(color: AppColors.black, width: 3),
-        boxShadow: _isPressed
-            ? []
-            : [
+        border: hasBorder
+            ? Border.all(color: widget.borderColor, width: 3)
+            : null,
+        boxShadow: hasShadow
+            ? [
                 BoxShadow(
-                  color: AppColors.black,
+                  color: widget.shadowColor,
                   offset: const Offset(2, 4),
                   blurRadius: 0,
                   spreadRadius: 0,
                 ),
-              ],
+              ]
+            : [],
       ),
       child: Center(
         child: widget.isLoading
@@ -88,15 +156,13 @@ class _CustomButtonState extends State<CustomButton> {
             : Text(
                 widget.title,
                 style: AppTypography.link16Medium.copyWith(
-                  color: widget.onPressed == null
-                      ? AppColors.lightGray
-                      : AppColors.black,
+                  color: effectiveTextColor,
                 ),
               ),
       ),
     );
 
-    return widget.onPressed == null || widget.isLoading
+    return isDisabled || widget.isLoading
         ? child
         : GestureDetector(
             behavior: HitTestBehavior.opaque,
