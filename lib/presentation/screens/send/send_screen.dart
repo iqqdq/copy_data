@@ -6,17 +6,17 @@ import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 
-import '../../core/core.dart';
-import '../presentation.dart';
+import '../../../core/core.dart';
+import '../../presentation.dart';
 
-class ClientScreen extends StatefulWidget {
-  const ClientScreen({super.key});
+class SendScreen extends StatefulWidget {
+  const SendScreen({super.key});
 
   @override
-  State<ClientScreen> createState() => _ClientScreenState();
+  State<SendScreen> createState() => _SendScreenState();
 }
 
-class _ClientScreenState extends State<ClientScreen> {
+class _SendScreenState extends State<SendScreen> {
   bool _isConnecting = false;
   bool _showScanner = true;
   bool _isConnected = false;

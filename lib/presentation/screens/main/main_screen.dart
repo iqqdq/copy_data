@@ -125,12 +125,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (roleIndex == 0) {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => ServerScreen()),
+          MaterialPageRoute(builder: (context) => ReceiveScreen()),
         );
       } else {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => ClientScreen()),
+          MaterialPageRoute(builder: (context) => SendScreen()),
         );
       }
     }

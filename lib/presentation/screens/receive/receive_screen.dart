@@ -3,17 +3,17 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../../core/core.dart';
-import '../presentation.dart';
+import '../../../core/core.dart';
+import '../../presentation.dart';
 
-class ServerScreen extends StatefulWidget {
-  const ServerScreen({super.key});
+class ReceiveScreen extends StatefulWidget {
+  const ReceiveScreen({super.key});
 
   @override
-  State<ServerScreen> createState() => _ServerScreenState();
+  State<ReceiveScreen> createState() => _ReceiveScreenState();
 }
 
-class _ServerScreenState extends State<ServerScreen> {
+class _ReceiveScreenState extends State<ReceiveScreen> {
   int _selectedIndex = 0;
   bool _isSending = false;
   bool _showProgress = false;

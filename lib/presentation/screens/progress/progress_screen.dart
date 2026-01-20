@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import 'package:provider/provider.dart';
-import '../../core/core.dart';
+
+import '../../../core/core.dart';
 
 class ProgressScreen extends StatefulWidget {
   final bool isSending; // true = отправка (сервер), false = получение (клиент)
