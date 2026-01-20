@@ -4,14 +4,14 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class CustomIconButton extends StatelessWidget {
+  final Widget icon;
+  final VoidCallback onPressed;
+
   const CustomIconButton({
     super.key,
     required this.icon,
     required this.onPressed,
   });
-
-  final Widget icon;
-  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {

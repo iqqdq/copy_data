@@ -1,9 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:local_file_transfer/presentation/presentation.dart';
 
 import '../../core/core.dart';
+
+import 'custom_loader.dart';
 
 class CustomButton extends StatefulWidget {
   final String title;

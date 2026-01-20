@@ -1,6 +1,8 @@
 PODS:
   - connectivity_plus (0.0.1):
     - Flutter
+  - device_info_plus (0.0.1):
+    - Flutter
   - ffmpeg_kit_flutter_new (1.0.0):
     - ffmpeg_kit_flutter_new/full-gpl (= 1.0.0)
     - Flutter
@@ -25,6 +27,7 @@ PODS:
 
 DEPENDENCIES:
   - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
+  - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - ffmpeg_kit_flutter_new (from `.symlinks/plugins/ffmpeg_kit_flutter_new/ios`)
   - Flutter (from `Flutter`)
   - image_gallery_saver_plus (from `.symlinks/plugins/image_gallery_saver_plus/ios`)
@@ -41,6 +44,8 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   connectivity_plus:
     :path: ".symlinks/plugins/connectivity_plus/ios"
+  device_info_plus:
+    :path: ".symlinks/plugins/device_info_plus/ios"
   ffmpeg_kit_flutter_new:
     :path: ".symlinks/plugins/ffmpeg_kit_flutter_new/ios"
   Flutter:
@@ -60,6 +65,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   connectivity_plus: cb623214f4e1f6ef8fe7403d580fdad517d2f7dd
+  device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   ffmpeg_kit_flutter_new: 12426a19f10ac81186c67c6ebc4717f8f4364b7f
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   image_gallery_saver_plus: e597bf65a7846979417a3eae0763b71b6dfec6c3

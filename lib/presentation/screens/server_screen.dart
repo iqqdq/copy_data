@@ -14,6 +14,7 @@ class ServerScreen extends StatefulWidget {
 }
 
 class _ServerScreenState extends State<ServerScreen> {
+  int _selectedIndex = 0;
   bool _isSending = false;
   bool _showProgress = false;
   bool _autoSendTriggered = false;
@@ -157,6 +158,11 @@ class _ServerScreenState extends State<ServerScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            CustomTabBar(
+              tabs: ['Transfer to IOS', 'Transfer to Android'],
+              selectedIndex: _selectedIndex,
+              onTabSelected: (index) => setState(() => _selectedIndex = index),
+            ),
             Card(
               margin: EdgeInsets.all(20),
               child: Padding(
