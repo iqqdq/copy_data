@@ -44,7 +44,10 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   icon: icon,
                 )
               : const SizedBox.shrink()),
-      title: Text(title, style: AppTypography.link16Medium),
+      title: Text(title),
+      titleTextStyle: AppTypography.link16Medium.copyWith(
+        color: AppColors.black,
+      ),
       actions: actions,
       actionsPadding: EdgeInsets.symmetric(horizontal: 8.0),
     );

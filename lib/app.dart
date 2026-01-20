@@ -12,7 +12,7 @@ class App extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(scaffoldBackgroundColor: AppColors.white),
-      home: MainScreen(),
+      home: TutorialScreen(),
     );
   }
 }

@@ -10,8 +10,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
-import 'widgets/widgets.dart';
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 

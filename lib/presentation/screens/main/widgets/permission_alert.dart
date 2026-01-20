@@ -24,6 +24,7 @@ class PermissionAlert extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: EdgeInsets.symmetric(horizontal: 24.0),
       width: MediaQuery.of(context).size.width,
       height: MediaQuery.of(context).size.height,
       color: AppColors.black.withValues(alpha: 0.65),
@@ -31,7 +32,6 @@ class PermissionAlert extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: Container(
-            margin: EdgeInsets.symmetric(horizontal: 24.0),
             padding: EdgeInsets.all(24.0).copyWith(bottom: 8.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(32.0),
