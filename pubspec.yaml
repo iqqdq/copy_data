@@ -36,10 +36,7 @@ dependencies:
 
   flutter_svg: ^2.2.3
 
-  flutter_localizations:
-    sdk: flutter
-  intl: 0.20.2
-  path: ^1.9.1
+  icons_launcher: ^3.0.3
 
 dev_dependencies:
   flutter_test:
@@ -64,3 +61,11 @@ flutter:
           weight: 400
         - asset: assets/fonts/morn-medium.ttf
           weight: 500
+
+icons_launcher:
+  image_path: "assets/app_icon.png"
+  platforms:
+    android:
+      enable: true
+    ios:
+      enable: true

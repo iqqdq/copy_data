@@ -83,12 +83,14 @@ and connect the other to it.
           return index == titles.length - 1
               ? CustomButton.primary(
                   title: 'Got it',
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (builder) => const MainScreen(),
-                    ), // TODO: REPLACE WITH NAMED ROUTE
-                  ),
+                  onPressed: () =>
+                      // TODO: REPLACE WITH NAMED ROUTE & SAVE STATUS
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (builder) => const MainScreen(),
+                        ),
+                      ),
                 )
               : item;
         },
