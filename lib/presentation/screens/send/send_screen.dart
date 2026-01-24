@@ -34,8 +34,6 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   Future<void> _onQRViewCreated(QRViewController controller) async {
-    _qrController = controller;
-
     // Обработка разрешений
     controller.scannedDataStream.listen((scanData) async {
       if (_isConnecting || _isConnected) return;

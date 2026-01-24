@@ -35,7 +35,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     // Запускаем проверку разрешений при инициализации
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkPermissionsWithDelay();
+      _checkPermissions();
     });
   }
 
@@ -49,7 +49,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Проверяем разрешения, когда приложение возвращается из фона
     if (state == AppLifecycleState.resumed) {
-      _checkPermissionsWithDelay();
+      _checkPermissions();
     }
   }
 
@@ -63,7 +63,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             automaticallyImplyLeading: false,
             actions: [
               CustomIconButton(
-                onPressed: () {},
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => SettingsScreen()),
+                ),
                 icon: SvgPicture.asset(
                   'assets/icons/setting.svg',
                   colorFilter: ColorFilter.mode(
@@ -136,12 +139,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _checkPermissionsWithDelay() async {
-    await Future.delayed(Duration(milliseconds: 500));
-    _checkPermissions();
-  }
-
   Future<void> _checkPermissions() async {
+    await Future.delayed(Duration(milliseconds: 300));
+
     if (_isCheckingPermissions) return;
 
     setState(() => _isCheckingPermissions = true);
@@ -401,7 +401,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Later'),
+            child: Text('Close'),
           ),
           TextButton(
             onPressed: () {

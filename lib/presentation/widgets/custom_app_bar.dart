@@ -48,6 +48,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       titleTextStyle: AppTypography.link16Medium.copyWith(
         color: AppColors.black,
       ),
+      centerTitle: true,
       actions: actions,
       actionsPadding: EdgeInsets.symmetric(horizontal: 8.0),
     );

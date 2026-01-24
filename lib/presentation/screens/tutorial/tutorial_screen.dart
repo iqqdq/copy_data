@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -38,7 +38,10 @@ class TutorialScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      appBar: CustomAppBar(title: 'Tutorial', automaticallyImplyLeading: false),
+      appBar: CustomAppBar(
+        title: 'Tutorial',
+        automaticallyImplyLeading: Navigator.canPop(context),
+      ),
       body: ListView.separated(
         padding: EdgeInsets.symmetric(
           horizontal: 24.0,
@@ -51,7 +54,7 @@ class TutorialScreen extends StatelessWidget {
             asset: titles[index].toLowerCase().replaceAll(' ', '_'),
             title: '${index + 1}. ${titles[index]}',
             subtitle: index == 0
-                ? _ClickablePlatformText(
+                ? ClickablePlatformText(
                     title: subtitles[index],
                     highlighted: 'iOS / Android',
                     onPressed: () {
@@ -69,7 +72,7 @@ class TutorialScreen extends StatelessWidget {
                     highlightColor: AppColors.accent,
                   ),
             hint: index == 1
-                ? _TutorialHint(
+                ? TutorialHint(
                     title: '''
 If Wi-Fi isn't available,
 enable hotspot mode on one device
@@ -94,94 +97,6 @@ and connect the other to it.
                 )
               : item;
         },
-      ),
-    );
-  }
-}
-
-class _ClickablePlatformText extends StatelessWidget {
-  final String title;
-  final String highlighted;
-  final VoidCallback onPressed;
-
-  const _ClickablePlatformText({
-    required this.title,
-    required this.highlighted,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final parts = title.split(highlighted);
-
-    return RichText(
-      text: TextSpan(
-        style: AppTypography.body16Light.copyWith(color: AppColors.black),
-        children: [
-          TextSpan(text: parts[0]),
-          TextSpan(
-            text: 'iOS',
-            style: AppTypography.body16Light.copyWith(
-              color: AppColors.accent,
-              decoration: TextDecoration.underline,
-              decorationColor: AppColors.accent,
-            ),
-            recognizer: TapGestureRecognizer()..onTap = onPressed,
-          ),
-          TextSpan(
-            text: ' / ',
-            style: AppTypography.body16Light.copyWith(color: AppColors.accent),
-          ),
-          TextSpan(
-            text: 'Android',
-            style: AppTypography.body16Light.copyWith(
-              color: AppColors.accent,
-              decoration: TextDecoration.underline,
-              decorationColor: AppColors.accent,
-            ),
-            recognizer: TapGestureRecognizer()..onTap = onPressed,
-          ),
-          if (parts.length > 1) TextSpan(text: parts[1]),
-        ],
-      ),
-    );
-  }
-}
-
-class _TutorialHint extends StatelessWidget {
-  final String title;
-  final String highlighted;
-
-  const _TutorialHint({required this.title, required this.highlighted});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(top: 8.0),
-      child: Row(
-        children: [
-          Padding(
-            padding: EdgeInsets.only(right: 8.0),
-            child: Image.asset(
-              'assets/images/warning.png',
-              width: 24.0,
-              height: 24.0,
-            ),
-          ),
-          Expanded(
-            child:
-                'If Wi‑Fi isn’t available, enable hotspot mode on one device and connect the other to it'
-                    .toMultiColoredText(
-                      baseStyle: AppTypography.body16Light,
-                      highlights: [
-                        TextHighlight(
-                          text: 'Wi‑Fi isn’t available',
-                          color: AppColors.orange,
-                        ),
-                      ],
-                    ),
-          ),
-        ],
       ),
     );
   }
