@@ -27,7 +27,7 @@ abstract class AppTypography {
 
   static final body16Light = TextStyle(
     fontFamily: fontFamily,
-    fontWeight: FontWeight.w400,
+    fontWeight: FontWeight.w500,
     fontSize: 16.0,
   );
 

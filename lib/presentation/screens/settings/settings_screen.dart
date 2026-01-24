@@ -30,7 +30,12 @@ class SettingsScreen extends StatelessWidget {
             padding: EdgeInsets.only(bottom: 16.0),
             child: CustomButton.primary(
               title: 'Subscription plans',
-              onPressed: () {},
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SubscriptionPlansScreen(),
+                ),
+              ),
             ),
           ),
 
@@ -64,7 +69,9 @@ class SettingsScreen extends StatelessWidget {
                   return SettingsTile(
                     asset: assets[index],
                     title: titles[index],
-                    onPressed: () {},
+                    onPressed: () {
+                      // TODO:
+                    },
                   );
                 },
               ),
