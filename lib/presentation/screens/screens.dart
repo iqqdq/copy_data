@@ -1,4 +1,5 @@
 export 'main/main.dart';
+export 'onboard/onboard.dart';
 export 'progress/progress.dart';
 export 'receive/receive.dart';
 export 'send/send.dart';

@@ -136,8 +136,8 @@ class _CustomTabBarState extends State<CustomTabBar>
                         decoration: BoxDecoration(
                           color: AppColors.accent,
                           borderRadius: const BorderRadius.only(
-                            bottomLeft: Radius.circular(3),
-                            bottomRight: Radius.circular(3),
+                            bottomLeft: Radius.circular(3.0),
+                            bottomRight: Radius.circular(3.0),
                           ),
                         ),
                       ),

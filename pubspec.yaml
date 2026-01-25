@@ -36,6 +36,8 @@ dependencies:
 
   flutter_svg: ^2.2.3
 
+  url_launcher: ^6.3.2
+
   icons_launcher: ^3.0.3
 
 dev_dependencies:

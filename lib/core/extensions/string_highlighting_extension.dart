@@ -6,18 +6,21 @@ extension StringHighlighting on String {
     required List<String> highlightedWords,
     required TextStyle baseStyle,
     Color highlightColor = AppColors.accent,
+    TextAlign? textAlign,
   }) {
     return _buildRichText(
       text: this,
       highlightedWords: highlightedWords,
       baseStyle: baseStyle,
       highlightColor: highlightColor,
+      textAlign: textAlign,
     );
   }
 
   Widget toMultiColoredText({
     required TextStyle baseStyle,
     required List<TextHighlight> highlights,
+    TextAlign? textAlign,
   }) {
     final defaultBaseStyle = baseStyle.copyWith(
       color: baseStyle.color ?? AppColors.black,
@@ -25,7 +28,6 @@ extension StringHighlighting on String {
     final spans = <TextSpan>[];
     String text = this;
 
-    // Сортируем по позиции для правильной обработки
     final sortedHighlights =
         highlights
             .where((h) => text.toLowerCase().contains(h.text.toLowerCase()))
@@ -62,6 +64,7 @@ extension StringHighlighting on String {
     }
 
     return RichText(
+      textAlign: textAlign ?? TextAlign.start,
       text: TextSpan(style: defaultBaseStyle, children: spans),
     );
   }
@@ -71,6 +74,7 @@ extension StringHighlighting on String {
     required List<String> highlightedWords,
     required TextStyle baseStyle,
     required Color highlightColor,
+    TextAlign? textAlign,
   }) {
     final defaultBaseStyle = baseStyle.copyWith(
       color: baseStyle.color ?? AppColors.black,
@@ -108,6 +112,7 @@ extension StringHighlighting on String {
     }
 
     return RichText(
+      textAlign: textAlign ?? TextAlign.start,
       text: TextSpan(style: defaultBaseStyle, children: spans),
     );
   }

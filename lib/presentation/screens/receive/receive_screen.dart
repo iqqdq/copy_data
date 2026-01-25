@@ -18,6 +18,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   bool _isSending = false;
   bool _showProgress = false;
   bool _autoSendTriggered = false;
+  final Map<int, bool> _tabLoadingStates = {0: false, 1: false};
+  final Map<int, bool> _tabInitialized = {0: false, 1: false};
 
   @override
   void initState() {
@@ -30,11 +32,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    // Слушаем изменения в FileTransferService
     final service = Provider.of<FileTransferService>(context);
-
-    // Когда появляются подключенные клиенты и еще не было автоматической отправки
     if (service.connectedClients.isNotEmpty &&
         !_autoSendTriggered &&
         !_showProgress) {
@@ -56,17 +54,12 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
       _showProgress = true;
       _autoSendTriggered = true;
     });
-
-    // Небольшая задержка перед автоматической отправкой
     await Future.delayed(Duration(milliseconds: 500));
-
-    // Автоматически запускаем выбор и отправку файлов
     await _pickAndSendMedia();
   }
 
   Future<void> _pickAndSendMedia() async {
     final service = Provider.of<FileTransferService>(context, listen: false);
-
     if (service.connectedClients.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -75,20 +68,15 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
       }
       return;
     }
-
     setState(() => _isSending = true);
-
     try {
       final pickedFiles = await ImagePicker().pickMultipleMedia();
       final files = <File>[];
-
       for (final image in pickedFiles) {
         files.add(File(image.path));
       }
-
       if (files.isNotEmpty) {
         await service.sendFilesToConnectedClient(files);
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -98,7 +86,6 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
           );
         }
       } else {
-        // Если пользователь не выбрал файлы, возвращаемся к QR-коду
         setState(() {
           _showProgress = false;
           _autoSendTriggered = false;
@@ -113,8 +100,6 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
           ),
         );
       }
-
-      // При ошибке тоже возвращаемся к QR-коду
       setState(() {
         _showProgress = false;
         _autoSendTriggered = false;
@@ -124,79 +109,136 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
     }
   }
 
+  void _handleTabChange(int index) {
+    if (!_tabInitialized[index]! && !_tabLoadingStates[index]!) {
+      setState(() {
+        _tabLoadingStates[index] = true;
+      });
+      Future.delayed(Duration(milliseconds: 300), () {
+        if (mounted) {
+          setState(() {
+            _selectedIndex = index;
+            _tabLoadingStates[index] = false;
+            _tabInitialized[index] = true;
+          });
+        }
+      });
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<FileTransferService>(context);
-
     return Scaffold(
       appBar: CustomAppBar(
         title: _showProgress ? 'Sending files' : 'Send file',
-        leading: _showProgress
-            ? IconButton(
-                icon: Icon(Icons.arrow_back),
-                onPressed: () {
-                  setState(() {
-                    _showProgress = false;
-                    _autoSendTriggered = false;
-                  });
-                },
-              )
-            : null,
       ),
-      body: _showProgress
-          ? ProgressScreen(isSending: true)
-          : _buildQrCodeCard(service),
-    );
-  }
-
-  Widget _buildQrCodeCard(FileTransferService service) {
-    final serverInfo = '${service.localIp}:${FileTransferService.PORT}';
-    final hasClients = service.connectedClients.isNotEmpty;
-
-    return Center(
-      child: SingleChildScrollView(
+      body: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CustomTabBar(
               tabs: ['Transfer to IOS', 'Transfer to Android'],
               selectedIndex: _selectedIndex,
-              onTabSelected: (index) => setState(() => _selectedIndex = index),
+              onTabSelected: _handleTabChange,
             ),
-            Card(
-              margin: EdgeInsets.all(20),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  children: [
-                    Text(
-                      'Tap Receive and scan the QR code on the sending device to get the files',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 20),
-
-                    // QR-код (показываем всегда)
-                    QrImageView(
-                      data: serverInfo,
-                      version: QrVersions.auto,
-                      size: 250,
-                      backgroundColor: Colors.white,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            _showProgress
+                ? ProgressScreen(isSending: true)
+                : _buildQrCodeCard(service),
           ],
         ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    super.dispose();
+  Widget _buildQrCodeCard(FileTransferService service) {
+    final serverInfo = _selectedIndex == 0
+        ? 'ios_${service.localIp}:${FileTransferService.PORT}'
+        : 'android_${service.localIp}:${FileTransferService.PORT}';
+    final title = _selectedIndex == 0
+        ? 'Send file to IOS device'
+        : 'Send file to Android device';
+    final description = _selectedIndex == 0
+        ? 'Tap Receive and scan the QR code on the sending device to get the files'
+        : 'Tap Receive and scan the QR code on the sending device to get the files';
+
+    return Expanded(
+      child: AnimatedSwitcher(
+        duration: Duration(milliseconds: 300),
+        transitionBuilder: (child, animation) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        child: _tabLoadingStates[_selectedIndex]!
+            ? _buildLoadingCard()
+            : ListView(
+                key: ValueKey<int>(_selectedIndex),
+                padding: EdgeInsets.symmetric(
+                  vertical: 24.0,
+                ).copyWith(bottom: MediaQuery.of(context).padding.bottom),
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 16.0),
+                        child: Image.asset(
+                          'assets/images/send_file.png',
+                          width: 74.0,
+                          height: 74.0,
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 8.0),
+                        child: Text(title, style: AppTypography.title20Medium),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 8.0),
+                        child: description.toHighlightedText(
+                          highlightedWords: ['Receive'],
+                          baseStyle: AppTypography.body16Light,
+                          highlightColor: AppColors.accent,
+                        ),
+                      ),
+                      QrImageView(
+                        data: serverInfo,
+                        version: QrVersions.auto,
+                        backgroundColor: Colors.white,
+                      ),
+                    ],
+                  ).withDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(32.0),
+                    borderWidth: 3.0,
+                    borderColor: AppColors.black,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24.0,
+                      vertical: 32.0,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingCard() {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        vertical: 24.0,
+      ).copyWith(bottom: MediaQuery.of(context).padding.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(32.0),
+          border: Border.all(width: 3.0, color: AppColors.black),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+        child: Center(child: CustomSpinnerLoader()),
+      ),
+    );
   }
 }

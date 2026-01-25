@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/core.dart';
@@ -41,41 +43,37 @@ class SettingsScreen extends StatelessWidget {
 
           Padding(
             padding: EdgeInsets.only(bottom: 16.0),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32.0),
-                border: Border.all(color: AppColors.black, width: 3.0),
-                color: AppColors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.black,
-                    offset: const Offset(0, 3),
-                    blurRadius: 0,
-                    spreadRadius: 0,
+            child:
+                ListView.separated(
+                  padding: Platform.isIOS
+                      ? EdgeInsets.symmetric(vertical: 12.0)
+                      : EdgeInsets.symmetric(vertical: 24.0),
+                  physics: const NeverScrollableScrollPhysics(),
+                  shrinkWrap: true,
+                  itemCount: titles.length,
+                  separatorBuilder: (context, index) => Container(
+                    margin: EdgeInsets.symmetric(horizontal: 24.0),
+                    height: 1.0,
+                    color: AppColors.extraLightGray,
                   ),
-                ],
-              ),
-              child: ListView.separated(
-                padding: EdgeInsets.symmetric(vertical: 24.0),
-                physics: const NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                itemCount: titles.length,
-                separatorBuilder: (context, index) => Container(
-                  margin: EdgeInsets.symmetric(horizontal: 24.0),
-                  height: 1.0,
-                  color: AppColors.extraLightGray,
+                  itemBuilder: (context, index) {
+                    return SettingsTile(
+                      asset: assets[index],
+                      title: titles[index],
+                      onPressed: () {
+                        // TODO:
+                      },
+                    );
+                  },
+                ).withDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(32.0),
+                  borderWidth: 3.0,
+                  borderColor: AppColors.black,
+                  offset: const Offset(0, 3),
+                  blurRadius: 0,
+                  spreadRadius: 0,
                 ),
-                itemBuilder: (context, index) {
-                  return SettingsTile(
-                    asset: assets[index],
-                    title: titles[index],
-                    onPressed: () {
-                      // TODO:
-                    },
-                  );
-                },
-              ),
-            ),
           ),
         ],
       ),

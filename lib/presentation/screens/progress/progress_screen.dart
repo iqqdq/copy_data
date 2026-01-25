@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../core/core.dart';
 
 class ProgressScreen extends StatefulWidget {
-  final bool isSending; // true = отправка (сервер), false = получение (клиент)
+  final bool isSending;
 
   const ProgressScreen({super.key, required this.isSending});
 
@@ -21,7 +21,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final transfers = service.activeTransfers.values.toList();
 
     if (transfers.isEmpty) {
-      return true; // Все передачи завершены или отменены
+      return true;
     }
 
     // Проверяем, все ли передачи завершены (прогресс = 100%)

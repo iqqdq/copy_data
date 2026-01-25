@@ -9,6 +9,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   runApp(
-    ChangeNotifierProvider(create: (_) => FileTransferService(), child: App()),
+    MultiProvider(
+      providers: [
+        // ChangeNotifierProvider(create: (_) => PurchaseService()), // TODO: UNCOMMENT
+        ChangeNotifierProvider(create: (_) => FileTransferService()),
+      ],
+      child: App(),
+    ),
   );
 }

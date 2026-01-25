@@ -54,31 +54,23 @@ class _SubscriptionTileState extends State<SubscriptionTile> {
 
     final child = AnimatedContainer(
       duration: const Duration(milliseconds: 100),
-      padding: EdgeInsets.all(24.0),
       curve: Curves.easeInOut,
       transform: Matrix4.translationValues(
         _isPressed ? 2 : 0,
         _isPressed ? 4 : 0,
         0,
       ),
-      decoration: BoxDecoration(
+      child: Row(children: [widget.child]).withDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(32.0),
-        border: hasBorder
-            ? Border.all(color: AppColors.black, width: 3.0)
-            : null,
-        boxShadow: hasShadow
-            ? [
-                BoxShadow(
-                  color: AppColors.black,
-                  offset: const Offset(0, 3),
-                  blurRadius: 0,
-                  spreadRadius: 0,
-                ),
-              ]
-            : [],
+        borderWidth: hasBorder ? 3.0 : 0,
+        borderColor: hasBorder ? AppColors.black : Colors.transparent,
+        offset: hasShadow ? const Offset(0, 3) : const Offset(0, 0),
+        shadowColor: hasShadow ? AppColors.black : Colors.transparent,
+        blurRadius: 0,
+        spreadRadius: 0,
+        padding: EdgeInsets.all(24.0),
       ),
-      child: Row(children: [widget.child]),
     );
 
     return GestureDetector(

@@ -36,7 +36,10 @@ class SettingsTile extends StatelessWidget {
 
           Text(
             title,
-            style: AppTypography.body16Light.copyWith(color: AppColors.black),
+            style: AppTypography.body16Light.copyWith(
+              color: AppColors.black,
+              fontWeight: AppTypography.body16Light.fontWeight,
+            ),
           ),
         ],
       ),
@@ -45,7 +48,8 @@ class SettingsTile extends StatelessWidget {
     return Platform.isIOS
         ? CupertinoButton(
             onPressed: onPressed,
-            padding: EdgeInsets.zero,
+            padding: EdgeInsets.symmetric(vertical: 4.0),
+            minimumSize: Size.zero,
             child: child,
           )
         : MaterialButton(

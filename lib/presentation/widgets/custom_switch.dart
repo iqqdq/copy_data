@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/ui/ui.dart';
+import '../../core/core.dart';
 
 class CustomSwitch extends StatefulWidget {
   final bool value;
@@ -76,63 +76,57 @@ class _CustomSwitchState extends State<CustomSwitch>
           widget.onChanged!(!widget.value);
         }
       },
-      child: Container(
+      child: SizedBox(
         width: widget.width,
         height: widget.height,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(widget.height / 2),
-          border: Border.all(color: AppColors.black, width: widget.borderWidth),
-          color: Colors.transparent,
-        ),
-        child: Stack(
-          clipBehavior: Clip.hardEdge,
-          children: [
-            // Backgorund
-            AnimatedContainer(
-              duration: widget.animationDuration,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(widget.height / 2),
-                color: widget.value
-                    ? AppColors.accent
-                    : AppColors.extraLightGray,
-              ),
-            ),
-
-            // Circle
-            AnimatedBuilder(
-              animation: _animation,
-              builder: (context, child) {
-                final double leftPosition =
-                    (maxLeft - minLeft) * _animation.value;
-
-                return Positioned(
-                  left: leftPosition,
-                  top: padding,
-                  bottom: padding,
-                  child: Container(
-                    width: circleDiameter,
-                    height: circleDiameter,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.white,
-                      border: Border.all(
-                        color: AppColors.black,
-                        width: widget.borderWidth,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 1.0,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
+        child:
+            Stack(
+              clipBehavior: Clip.hardEdge,
+              children: [
+                AnimatedContainer(
+                  duration: widget.animationDuration,
+                  child: const SizedBox.shrink().withDecoration(
+                    color: widget.value
+                        ? AppColors.accent
+                        : AppColors.extraLightGray,
+                    borderRadius: BorderRadius.circular(widget.height / 2),
                   ),
-                );
-              },
+                ),
+
+                AnimatedBuilder(
+                  animation: _animation,
+                  builder: (context, child) {
+                    final double leftPosition =
+                        (maxLeft - minLeft) * _animation.value;
+
+                    return Positioned(
+                      left: leftPosition,
+                      top: padding,
+                      bottom: padding,
+                      child: SizedBox(
+                        width: circleDiameter,
+                        height: circleDiameter,
+                        child: const SizedBox.shrink().withDecoration(
+                          color: AppColors.white,
+                          shape: BoxShape.circle,
+                          borderWidth: widget.borderWidth,
+                          borderColor: AppColors.black,
+                          blurRadius: 1.0,
+                          spreadRadius: 0,
+                          offset: const Offset(0, 1),
+                          shadowColor: Colors.black.withValues(alpha: 0.1),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ).withDecoration(
+              borderRadius: BorderRadius.circular(widget.height / 2),
+              borderWidth: widget.borderWidth,
+              borderColor: AppColors.black,
+              color: Colors.transparent,
             ),
-          ],
-        ),
       ),
     );
   }

@@ -93,13 +93,14 @@ class _StaticRectangle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 8,
-      decoration: BoxDecoration(
+    return SizedBox(
+      width: 32.0,
+      height: 10.0,
+      child: const SizedBox.shrink().withDecoration(
         color: AppColors.accent,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.black, width: 2.0),
+        borderRadius: BorderRadius.circular(5.0),
+        borderWidth: 2.0,
+        borderColor: AppColors.black,
       ),
     );
   }
@@ -110,13 +111,14 @@ class _StaticCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(
+    return SizedBox(
+      width: 10.0,
+      height: 10.0,
+      child: const SizedBox.shrink().withDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.black, width: 2.0),
+        borderRadius: BorderRadius.circular(5.0),
+        borderWidth: 2.0,
+        borderColor: AppColors.black,
       ),
     );
   }
@@ -138,20 +140,21 @@ class _CircleToRectangleTransition extends AnimatedWidget {
     final Color color;
 
     if (isCurrent) {
-      width = 8 + (32 - 8) * progress.value;
+      width = 10.0 + (32 - 10.0) * progress.value;
       color = Color.lerp(AppColors.white, AppColors.accent, progress.value)!;
     } else {
-      width = 32 - (32 - 8) * progress.value;
+      width = 32 - (32 - 10.0) * progress.value;
       color = Color.lerp(AppColors.accent, AppColors.white, progress.value)!;
     }
 
-    return Container(
+    return SizedBox(
       width: width,
-      height: 8,
-      decoration: BoxDecoration(
+      height: 10.0,
+      child: const SizedBox.shrink().withDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AppColors.black, width: 2.0),
+        borderRadius: BorderRadius.circular(5.0),
+        borderWidth: 2.0,
+        borderColor: AppColors.black,
       ),
     );
   }

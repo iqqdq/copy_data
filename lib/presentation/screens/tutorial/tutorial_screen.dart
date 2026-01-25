@@ -88,12 +88,14 @@ and connect the other to it.
                   title: 'Got it',
                   onPressed: () =>
                       // TODO: REPLACE WITH NAMED ROUTE & SAVE STATUS
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (builder) => const MainScreen(),
+                      Navigator.canPop(context)
+                      ? Navigator.pop(context)
+                      : Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (builder) => const MainScreen(),
+                          ),
                         ),
-                      ),
                 )
               : item;
         },

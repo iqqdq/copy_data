@@ -45,4 +45,9 @@ abstract class AppTypography {
     fontWeight: FontWeight.w500,
     fontSize: 16.0,
   );
+
+  static final link12Regular = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 12.0,
+  );
 }

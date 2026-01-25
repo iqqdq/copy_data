@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:provider/provider.dart';
+
 import '../core/core.dart';
 
 import 'presentation/presentation.dart';
@@ -12,7 +14,10 @@ class App extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(scaffoldBackgroundColor: AppColors.white),
-      home: TutorialScreen(),
+      home: ChangeNotifierProvider(
+        create: (_) => FileTransferService(),
+        child: OnboardScreen(),
+      ),
     );
   }
 }

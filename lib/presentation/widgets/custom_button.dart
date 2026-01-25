@@ -66,7 +66,6 @@ class CustomButton extends StatefulWidget {
   factory CustomButton.transparent({
     Key? key,
     required String title,
-
     required VoidCallback onPressed,
   }) {
     return CustomButton._internal(
@@ -134,33 +133,26 @@ class _CustomButtonState extends State<CustomButton> {
         _isPressed ? 4 : 0,
         0,
       ),
-      decoration: BoxDecoration(
-        color: effectiveColor,
-        borderRadius: BorderRadius.circular(500),
-        border: hasBorder
-            ? Border.all(color: widget.borderColor, width: 3.0)
-            : null,
-        boxShadow: hasShadow
-            ? [
-                BoxShadow(
-                  color: widget.shadowColor,
-                  offset: const Offset(2, 4),
-                  blurRadius: 0,
-                  spreadRadius: 0,
-                ),
-              ]
-            : [],
-      ),
-      child: Center(
-        child: widget.isLoading
-            ? const CustomLoader()
-            : Text(
-                widget.title,
-                style: AppTypography.link16Medium.copyWith(
-                  color: effectiveTextColor,
-                ),
-              ),
-      ),
+      child:
+          Center(
+            child: widget.isLoading
+                ? const CustomLoader()
+                : Text(
+                    widget.title,
+                    style: AppTypography.link16Medium.copyWith(
+                      color: effectiveTextColor,
+                    ),
+                  ),
+          ).withDecoration(
+            color: effectiveColor,
+            borderRadius: BorderRadius.circular(500),
+            borderWidth: hasBorder ? 3.0 : 0,
+            borderColor: hasBorder ? widget.borderColor : Colors.transparent,
+            offset: hasShadow ? const Offset(2, 4) : const Offset(0, 0),
+            shadowColor: hasShadow ? widget.shadowColor : Colors.transparent,
+            blurRadius: 0,
+            spreadRadius: 0,
+          ),
     );
 
     return isDisabled || widget.isLoading

@@ -14,46 +14,44 @@ class MainTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Image.asset(
+            'assets/images/${_isSend ? 'send_file' : 'receive_file'}.png',
+            width: 74.0,
+            height: 74.0,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Text(
+            '${_isSend ? 'Send' : 'Receive'} file',
+            style: AppTypography.title20Medium,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Text(
+            _isSend
+                ? 'Choose files and share them instantly with nearby devices'
+                : 'Receive files fast and safely from other devices',
+            style: AppTypography.body16Light.copyWith(color: AppColors.grey),
+          ),
+        ),
+        CustomButton.primary(
+          title: _isSend ? 'Send' : 'Receive',
+          onPressed: onPressed,
+        ),
+      ],
+    ).withDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(32.0),
+      borderWidth: 3.0,
+      borderColor: AppColors.black,
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32.0),
-        border: Border.all(color: AppColors.black, width: 3.0),
-        color: AppColors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Image.asset(
-              'assets/images/${_isSend ? 'send_file' : 'receive_file'}.png',
-              width: 74.0,
-              height: 74.0,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Text(
-              '${_isSend ? 'Send' : 'Receive'} file',
-              style: AppTypography.title20Medium,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Text(
-              _isSend
-                  ? 'Choose files and share them instantly with nearby devices'
-                  : 'Receive files fast and safely from other devices',
-              style: AppTypography.body16Light.copyWith(color: AppColors.grey),
-            ),
-          ),
-          CustomButton.primary(
-            title: _isSend ? 'Send' : 'Receive',
-            onPressed: onPressed,
-          ),
-        ],
-      ),
     );
   }
 }

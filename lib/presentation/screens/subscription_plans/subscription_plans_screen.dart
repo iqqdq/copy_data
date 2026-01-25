@@ -30,15 +30,17 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // TODO: HAS ACTIVE SUBSCRIPTION
               Padding(
                 padding: EdgeInsets.only(bottom: 16.0),
                 child: Text(
                   index == 0
                       ? 'Your active subscription'
-                      : 'Other subscriptions', // TODO: HAS ACTIVE SUBSCRIPTION
+                      : 'Other subscriptions',
                   style: AppTypography.link16Medium,
                 ),
               ),
+
               SubscriptionTile(
                 child: subscriptions[index].toHighlightedText(
                   highlightedWords: [r'$4.99/week'],

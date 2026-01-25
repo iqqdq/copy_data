@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'package:flutter_svg/svg.dart';
 
 import '../../../../core/core.dart';
@@ -31,82 +30,78 @@ class PermissionAlert extends StatelessWidget {
       child: Center(
         child: Material(
           color: Colors.transparent,
-          child: Container(
+          child: _buildContent().withDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(32.0),
+            borderWidth: 3.0,
+            borderColor: AppColors.black,
             padding: EdgeInsets.all(24.0).copyWith(bottom: 8.0),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(32.0),
-              border: Border.all(color: AppColors.black, width: 3.0),
-              color: AppColors.white,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(bottom: 8.0),
-                  child: Text(
-                    'Permissions Required',
-                    style: AppTypography.title20Medium,
-                  ),
-                ),
-
-                Padding(
-                  padding: EdgeInsets.only(bottom: 16.0),
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        const TextSpan(text: 'To '),
-                        TextSpan(
-                          text: 'send or receive',
-                          style: const TextStyle().copyWith(
-                            color: AppColors.accent,
-                          ),
-                        ),
-                        const TextSpan(
-                          text:
-                              ' data, please allow the necessary permissions.',
-                        ),
-                      ],
-                    ),
-                    style: AppTypography.body16Light,
-                  ),
-                ),
-
-                _PermissionInfo(
-                  asset: 'assets/icons/wi-fi.svg',
-                  title: 'Local Network',
-                  isPermissionGranted: permissionStates[0],
-                ),
-
-                _PermissionInfo(
-                  asset: 'assets/icons/image.svg',
-                  title: 'Photos & Videos',
-                  isPermissionGranted: permissionStates[1],
-                ),
-
-                _PermissionInfo(
-                  asset: 'assets/icons/camera.svg',
-                  title: 'Camera',
-                  isPermissionGranted: permissionStates[2],
-                ),
-
-                Padding(
-                  padding: EdgeInsets.only(bottom: 8.0),
-                  child: CustomButton.primary(
-                    title: 'Next',
-                    onPressed: isRequestingPermission ? null : onNextPressed,
-                  ),
-                ),
-
-                CustomButton.transparent(
-                  title: 'Not now',
-                  onPressed: onNotNowPressed,
-                ),
-              ],
-            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(bottom: 8.0),
+          child: Text(
+            'Permissions Required',
+            style: AppTypography.title20Medium,
+          ),
+        ),
+
+        Padding(
+          padding: EdgeInsets.only(bottom: 16.0),
+          child: Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(text: 'To '),
+                TextSpan(
+                  text: 'send or receive',
+                  style: const TextStyle().copyWith(color: AppColors.accent),
+                ),
+                const TextSpan(
+                  text: ' data, please allow the necessary permissions.',
+                ),
+              ],
+            ),
+            style: AppTypography.body16Light,
+          ),
+        ),
+
+        _PermissionInfo(
+          asset: 'assets/icons/wi-fi.svg',
+          title: 'Local Network',
+          isPermissionGranted: permissionStates[0],
+        ),
+
+        _PermissionInfo(
+          asset: 'assets/icons/image.svg',
+          title: 'Photos & Videos',
+          isPermissionGranted: permissionStates[1],
+        ),
+
+        _PermissionInfo(
+          asset: 'assets/icons/camera.svg',
+          title: 'Camera',
+          isPermissionGranted: permissionStates[2],
+        ),
+
+        Padding(
+          padding: EdgeInsets.only(bottom: 8.0),
+          child: CustomButton.primary(
+            title: 'Next',
+            onPressed: isRequestingPermission ? null : onNextPressed,
+          ),
+        ),
+
+        CustomButton.transparent(title: 'Not now', onPressed: onNotNowPressed),
+      ],
     );
   }
 }
