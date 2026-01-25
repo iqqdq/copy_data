@@ -10,6 +10,10 @@ class CustomButton extends StatefulWidget {
   final String title;
   final bool isLoading;
   final VoidCallback? onPressed;
+  final Color color;
+  final Color textColor;
+  final Color borderColor;
+  final Color shadowColor;
 
   const CustomButton._internal({
     super.key,
@@ -21,11 +25,6 @@ class CustomButton extends StatefulWidget {
     this.isLoading = false,
     this.onPressed,
   });
-
-  final Color color;
-  final Color textColor;
-  final Color borderColor;
-  final Color shadowColor;
 
   factory CustomButton.primary({
     Key? key,
