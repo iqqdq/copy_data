@@ -134,14 +134,20 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
               onTabSelected: (index) {
                 if (!_tabInitialized[index]!) {
                   setState(() {
-                    _isQrLoading = true;
+                    _selectedIndex = index;
                   });
                   Future.delayed(Duration(milliseconds: 300), () {
                     if (mounted) {
                       setState(() {
-                        _selectedIndex = index;
-                        _isQrLoading = false;
-                        _tabInitialized[index] = true;
+                        _isQrLoading = true;
+                      });
+                      Future.delayed(Duration(milliseconds: 300), () {
+                        if (mounted) {
+                          setState(() {
+                            _isQrLoading = false;
+                            _tabInitialized[index] = true;
+                          });
+                        }
                       });
                     }
                   });
