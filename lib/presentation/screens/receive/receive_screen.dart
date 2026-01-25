@@ -157,91 +157,72 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
                 : Expanded(
                     child: AnimatedSwitcher(
                       duration: Duration(milliseconds: 300),
-                      child: _isQrLoading
-                          ? Container(
-                              padding: EdgeInsets.symmetric(vertical: 24.0)
-                                  .copyWith(
-                                    bottom: MediaQuery.of(
-                                      context,
-                                    ).padding.bottom,
-                                  ),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: AppColors.white,
-                                  borderRadius: BorderRadius.circular(32.0),
-                                  border: Border.all(
-                                    width: 3.0,
-                                    color: AppColors.black,
-                                  ),
+                      child: ListView(
+                        key: ValueKey<int>(_selectedIndex),
+                        padding: EdgeInsets.symmetric(vertical: 24.0).copyWith(
+                          bottom: MediaQuery.of(context).padding.bottom,
+                        ),
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: EdgeInsets.only(bottom: 16.0),
+                                child: Image.asset(
+                                  'assets/images/send_file.png',
+                                  width: 74.0,
+                                  height: 74.0,
                                 ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24.0,
-                                  vertical: 32.0,
-                                ),
-                                child: Center(child: CustomSpinnerLoader()),
                               ),
-                            )
-                          : ListView(
-                              key: ValueKey<int>(_selectedIndex),
-                              padding: EdgeInsets.symmetric(vertical: 24.0)
-                                  .copyWith(
-                                    bottom: MediaQuery.of(
-                                      context,
-                                    ).padding.bottom,
-                                  ),
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Padding(
-                                      padding: EdgeInsets.only(bottom: 16.0),
-                                      child: Image.asset(
-                                        'assets/images/send_file.png',
-                                        width: 74.0,
-                                        height: 74.0,
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.only(bottom: 8.0),
-                                      child: Text(
-                                        _selectedIndex == 0
-                                            ? 'Send file to IOS device'
-                                            : 'Send file to Android device',
-                                        style: AppTypography.title20Medium,
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: EdgeInsets.only(bottom: 8.0),
-                                      child:
-                                          'Tap Receive and scan the QR code on the sending device to get the files'
-                                              .toHighlightedText(
-                                                highlightedWords: ['Receive'],
-                                                baseStyle:
-                                                    AppTypography.body16Light,
-                                                highlightColor:
-                                                    AppColors.accent,
-                                              ),
-                                    ),
-                                    QrImageView(
-                                      data: _selectedIndex == 0
-                                          ? 'ios_${service.localIp}:${FileTransferService.PORT}'
-                                          : 'android_${service.localIp}:${FileTransferService.PORT}',
-                                      version: QrVersions.auto,
-                                      backgroundColor: Colors.white,
-                                    ),
-                                  ],
-                                ).withDecoration(
-                                  color: AppColors.white,
-                                  borderRadius: BorderRadius.circular(32.0),
-                                  borderWidth: 3.0,
-                                  borderColor: AppColors.black,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24.0,
-                                    vertical: 32.0,
-                                  ),
+                              Padding(
+                                padding: EdgeInsets.only(bottom: 8.0),
+                                child: Text(
+                                  _selectedIndex == 0
+                                      ? 'Send file to IOS device'
+                                      : 'Send file to Android device',
+                                  style: AppTypography.title20Medium,
                                 ),
-                              ],
+                              ),
+                              Padding(
+                                padding: EdgeInsets.only(bottom: 8.0),
+                                child:
+                                    'Tap Receive and scan the QR code on the sending device to get the files'
+                                        .toHighlightedText(
+                                          highlightedWords: ['Receive'],
+                                          baseStyle: AppTypography.body16Light,
+                                          highlightColor: AppColors.accent,
+                                        ),
+                              ),
+                              Center(
+                                child: Container(
+                                  height: 250,
+                                  width: 250,
+                                  alignment: Alignment.center,
+                                  child: _isQrLoading
+                                      ? CustomSpinnerLoader()
+                                      : QrImageView(
+                                          data: _selectedIndex == 0
+                                              ? 'ios_${service.localIp}:${FileTransferService.PORT}'
+                                              : 'android_${service.localIp}:${FileTransferService.PORT}',
+                                          version: QrVersions.auto,
+                                          backgroundColor: Colors.white,
+                                          size: 250,
+                                        ),
+                                ),
+                              ),
+                            ],
+                          ).withDecoration(
+                            color: AppColors.white,
+                            borderRadius: BorderRadius.circular(32.0),
+                            borderWidth: 3.0,
+                            borderColor: AppColors.black,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
+                              vertical: 32.0,
                             ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
           ],
