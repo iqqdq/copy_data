@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../core/core.dart';
 
 class CustomSwitch extends StatefulWidget {
@@ -76,57 +75,61 @@ class _CustomSwitchState extends State<CustomSwitch>
           widget.onChanged!(!widget.value);
         }
       },
-      child: SizedBox(
+      child: Container(
         width: widget.width,
         height: widget.height,
-        child:
-            Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                AnimatedContainer(
-                  duration: widget.animationDuration,
-                  child: const SizedBox.shrink().withDecoration(
-                    color: widget.value
-                        ? AppColors.accent
-                        : AppColors.extraLightGray,
-                    borderRadius: BorderRadius.circular(widget.height / 2),
-                  ),
-                ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.height / 2),
+          border: Border.all(color: AppColors.black, width: widget.borderWidth),
+        ),
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            AnimatedContainer(
+              duration: widget.animationDuration,
+              decoration: BoxDecoration(
+                color: widget.value
+                    ? AppColors.accent
+                    : AppColors.extraLightGray,
+                borderRadius: BorderRadius.circular(widget.height / 2),
+              ),
+            ),
 
-                AnimatedBuilder(
-                  animation: _animation,
-                  builder: (context, child) {
-                    final double leftPosition =
-                        (maxLeft - minLeft) * _animation.value;
+            AnimatedBuilder(
+              animation: _animation,
+              builder: (context, child) {
+                final double leftPosition =
+                    minLeft + (maxLeft - minLeft) * _animation.value;
 
-                    return Positioned(
-                      left: leftPosition,
-                      top: padding,
-                      bottom: padding,
-                      child: SizedBox(
-                        width: circleDiameter,
-                        height: circleDiameter,
-                        child: const SizedBox.shrink().withDecoration(
-                          color: AppColors.white,
-                          shape: BoxShape.circle,
-                          borderWidth: widget.borderWidth,
-                          borderColor: AppColors.black,
+                return Positioned(
+                  left: leftPosition,
+                  top: padding,
+                  bottom: padding,
+                  child: Container(
+                    width: circleDiameter,
+                    height: circleDiameter,
+                    decoration: BoxDecoration(
+                      color: AppColors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.black,
+                        width: widget.borderWidth,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          offset: const Offset(0, 1),
                           blurRadius: 1.0,
                           spreadRadius: 0,
-                          offset: const Offset(0, 1),
-                          shadowColor: Colors.black.withValues(alpha: 0.1),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ).withDecoration(
-              borderRadius: BorderRadius.circular(widget.height / 2),
-              borderWidth: widget.borderWidth,
-              borderColor: AppColors.black,
-              color: Colors.transparent,
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
+          ],
+        ),
       ),
     );
   }

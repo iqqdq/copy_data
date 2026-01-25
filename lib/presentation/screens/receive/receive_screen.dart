@@ -18,7 +18,7 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   bool _isSending = false;
   bool _showProgress = false;
   bool _autoSendTriggered = false;
-  final Map<int, bool> _tabLoadingStates = {0: false, 1: false};
+  bool _isQrLoading = true;
   final Map<int, bool> _tabInitialized = {0: false, 1: false};
 
   @override
@@ -46,6 +46,13 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
     final service = Provider.of<FileTransferService>(context, listen: false);
     if (!service.isServerRunning) {
       await service.startServer();
+    }
+    if (mounted) {
+      Future.delayed(Duration(milliseconds: 300), () {
+        setState(() {
+          _isQrLoading = false;
+        });
+      });
     }
   }
 
@@ -109,30 +116,10 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
     }
   }
 
-  void _handleTabChange(int index) {
-    if (!_tabInitialized[index]! && !_tabLoadingStates[index]!) {
-      setState(() {
-        _tabLoadingStates[index] = true;
-      });
-      Future.delayed(Duration(milliseconds: 300), () {
-        if (mounted) {
-          setState(() {
-            _selectedIndex = index;
-            _tabLoadingStates[index] = false;
-            _tabInitialized[index] = true;
-          });
-        }
-      });
-    } else {
-      setState(() {
-        _selectedIndex = index;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<FileTransferService>(context);
+
     return Scaffold(
       appBar: CustomAppBar(
         title: _showProgress ? 'Sending files' : 'Send file',
@@ -144,100 +131,121 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
             CustomTabBar(
               tabs: ['Transfer to IOS', 'Transfer to Android'],
               selectedIndex: _selectedIndex,
-              onTabSelected: _handleTabChange,
+              onTabSelected: (index) {
+                if (!_tabInitialized[index]!) {
+                  setState(() {
+                    _isQrLoading = true;
+                  });
+                  Future.delayed(Duration(milliseconds: 300), () {
+                    if (mounted) {
+                      setState(() {
+                        _selectedIndex = index;
+                        _isQrLoading = false;
+                        _tabInitialized[index] = true;
+                      });
+                    }
+                  });
+                } else {
+                  setState(() {
+                    _selectedIndex = index;
+                  });
+                }
+              },
             ),
             _showProgress
                 ? ProgressScreen(isSending: true)
-                : _buildQrCodeCard(service),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQrCodeCard(FileTransferService service) {
-    final serverInfo = _selectedIndex == 0
-        ? 'ios_${service.localIp}:${FileTransferService.PORT}'
-        : 'android_${service.localIp}:${FileTransferService.PORT}';
-    final title = _selectedIndex == 0
-        ? 'Send file to IOS device'
-        : 'Send file to Android device';
-    final description = _selectedIndex == 0
-        ? 'Tap Receive and scan the QR code on the sending device to get the files'
-        : 'Tap Receive and scan the QR code on the sending device to get the files';
-
-    return Expanded(
-      child: AnimatedSwitcher(
-        duration: Duration(milliseconds: 300),
-        transitionBuilder: (child, animation) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        child: _tabLoadingStates[_selectedIndex]!
-            ? _buildLoadingCard()
-            : ListView(
-                key: ValueKey<int>(_selectedIndex),
-                padding: EdgeInsets.symmetric(
-                  vertical: 24.0,
-                ).copyWith(bottom: MediaQuery.of(context).padding.bottom),
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 16.0),
-                        child: Image.asset(
-                          'assets/images/send_file.png',
-                          width: 74.0,
-                          height: 74.0,
-                        ),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 8.0),
-                        child: Text(title, style: AppTypography.title20Medium),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 8.0),
-                        child: description.toHighlightedText(
-                          highlightedWords: ['Receive'],
-                          baseStyle: AppTypography.body16Light,
-                          highlightColor: AppColors.accent,
-                        ),
-                      ),
-                      QrImageView(
-                        data: serverInfo,
-                        version: QrVersions.auto,
-                        backgroundColor: Colors.white,
-                      ),
-                    ],
-                  ).withDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(32.0),
-                    borderWidth: 3.0,
-                    borderColor: AppColors.black,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24.0,
-                      vertical: 32.0,
+                : Expanded(
+                    child: AnimatedSwitcher(
+                      duration: Duration(milliseconds: 300),
+                      child: _isQrLoading
+                          ? Container(
+                              padding: EdgeInsets.symmetric(vertical: 24.0)
+                                  .copyWith(
+                                    bottom: MediaQuery.of(
+                                      context,
+                                    ).padding.bottom,
+                                  ),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.white,
+                                  borderRadius: BorderRadius.circular(32.0),
+                                  border: Border.all(
+                                    width: 3.0,
+                                    color: AppColors.black,
+                                  ),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24.0,
+                                  vertical: 32.0,
+                                ),
+                                child: Center(child: CustomSpinnerLoader()),
+                              ),
+                            )
+                          : ListView(
+                              key: ValueKey<int>(_selectedIndex),
+                              padding: EdgeInsets.symmetric(vertical: 24.0)
+                                  .copyWith(
+                                    bottom: MediaQuery.of(
+                                      context,
+                                    ).padding.bottom,
+                                  ),
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: EdgeInsets.only(bottom: 16.0),
+                                      child: Image.asset(
+                                        'assets/images/send_file.png',
+                                        width: 74.0,
+                                        height: 74.0,
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: EdgeInsets.only(bottom: 8.0),
+                                      child: Text(
+                                        _selectedIndex == 0
+                                            ? 'Send file to IOS device'
+                                            : 'Send file to Android device',
+                                        style: AppTypography.title20Medium,
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: EdgeInsets.only(bottom: 8.0),
+                                      child:
+                                          'Tap Receive and scan the QR code on the sending device to get the files'
+                                              .toHighlightedText(
+                                                highlightedWords: ['Receive'],
+                                                baseStyle:
+                                                    AppTypography.body16Light,
+                                                highlightColor:
+                                                    AppColors.accent,
+                                              ),
+                                    ),
+                                    QrImageView(
+                                      data: _selectedIndex == 0
+                                          ? 'ios_${service.localIp}:${FileTransferService.PORT}'
+                                          : 'android_${service.localIp}:${FileTransferService.PORT}',
+                                      version: QrVersions.auto,
+                                      backgroundColor: Colors.white,
+                                    ),
+                                  ],
+                                ).withDecoration(
+                                  color: AppColors.white,
+                                  borderRadius: BorderRadius.circular(32.0),
+                                  borderWidth: 3.0,
+                                  borderColor: AppColors.black,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24.0,
+                                    vertical: 32.0,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                   ),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingCard() {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        vertical: 24.0,
-      ).copyWith(bottom: MediaQuery.of(context).padding.bottom),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(32.0),
-          border: Border.all(width: 3.0, color: AppColors.black),
+          ],
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-        child: Center(child: CustomSpinnerLoader()),
       ),
     );
   }

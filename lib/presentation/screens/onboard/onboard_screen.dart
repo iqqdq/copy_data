@@ -35,6 +35,8 @@ class _OnboardScreenState extends State<OnboardScreen> {
 
   int _index = 0;
 
+  bool _value = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,6 +99,39 @@ class _OnboardScreenState extends State<OnboardScreen> {
                                   textAlign: TextAlign.center,
                                 ),
                         ),
+
+                        _index == _titles.length - 1
+                            ? Padding(
+                                padding: EdgeInsets.only(bottom: 16.0),
+                                child:
+                                    Row(
+                                      children: [
+                                        Padding(
+                                          padding: EdgeInsets.only(right: 6.0),
+                                          child: Text(
+                                            '3-day free trial is enabled',
+                                            style: AppTypography.body16Light,
+                                          ),
+                                        ),
+
+                                        CustomSwitch(
+                                          value: _value,
+                                          onChanged: (value) =>
+                                              setState(() => _value = value),
+                                        ),
+                                      ],
+                                    ).withDecoration(
+                                      color: AppColors.white,
+                                      borderRadius: BorderRadius.circular(32.0),
+                                      borderWidth: 3.0,
+                                      borderColor: AppColors.black,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10.0,
+                                        vertical: 12.0,
+                                      ),
+                                    ),
+                              )
+                            : const SizedBox.shrink(),
 
                         CustomButton.primary(
                           title: 'Continue',
