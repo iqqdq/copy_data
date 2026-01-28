@@ -21,12 +21,12 @@ class ClickablePlatformText extends StatelessWidget {
 
     return RichText(
       text: TextSpan(
-        style: AppTypography.body16Light.copyWith(color: AppColors.black),
+        style: AppTypography.body16Regular.copyWith(color: AppColors.black),
         children: [
           TextSpan(text: parts[0]),
           TextSpan(
             text: 'iOS',
-            style: AppTypography.body16Light.copyWith(
+            style: AppTypography.body16Regular.copyWith(
               color: AppColors.accent,
               decoration: TextDecoration.underline,
               decorationColor: AppColors.accent,
@@ -35,11 +35,13 @@ class ClickablePlatformText extends StatelessWidget {
           ),
           TextSpan(
             text: ' / ',
-            style: AppTypography.body16Light.copyWith(color: AppColors.accent),
+            style: AppTypography.body16Regular.copyWith(
+              color: AppColors.accent,
+            ),
           ),
           TextSpan(
             text: 'Android',
-            style: AppTypography.body16Light.copyWith(
+            style: AppTypography.body16Regular.copyWith(
               color: AppColors.accent,
               decoration: TextDecoration.underline,
               decorationColor: AppColors.accent,

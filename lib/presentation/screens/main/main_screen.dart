@@ -92,6 +92,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
+
         // Показываем PermissionAlert если есть неподтвержденные разрешения
         if (_showPermissionAlert)
           PermissionAlert(
@@ -128,12 +129,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (roleIndex == 0) {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => ReceiveScreen()),
+          MaterialPageRoute(builder: (context) => SendScreen()),
         );
       } else {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => SendScreen()),
+          MaterialPageRoute(builder: (context) => ReceiveScreen()),
         );
       }
     }

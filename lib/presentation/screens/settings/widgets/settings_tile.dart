@@ -36,9 +36,9 @@ class SettingsTile extends StatelessWidget {
 
           Text(
             title,
-            style: AppTypography.body16Light.copyWith(
+            style: AppTypography.body16Regular.copyWith(
               color: AppColors.black,
-              fontWeight: AppTypography.body16Light.fontWeight,
+              fontWeight: AppTypography.body16Regular.fontWeight,
             ),
           ),
         ],

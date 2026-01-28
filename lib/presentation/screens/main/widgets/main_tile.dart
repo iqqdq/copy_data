@@ -38,7 +38,7 @@ class MainTile extends StatelessWidget {
             _isSend
                 ? 'Choose files and share them instantly with nearby devices'
                 : 'Receive files fast and safely from other devices',
-            style: AppTypography.body16Light.copyWith(color: AppColors.grey),
+            style: AppTypography.body16Regular.copyWith(color: AppColors.grey),
           ),
         ),
         CustomButton.primary(

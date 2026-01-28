@@ -90,19 +90,25 @@ class _ProgressScreenState extends State<ProgressScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              widget.isSending ? Icons.upload : Icons.download,
-              size: 64,
-              color: Colors.grey,
+            Padding(
+              padding: EdgeInsets.only(bottom: 16.0),
+              child: Icon(
+                widget.isSending ? Icons.upload : Icons.download,
+                size: 64,
+                color: Colors.grey,
+              ),
             ),
-            SizedBox(height: 16),
-            Text(
-              widget.isSending
-                  ? 'Файлы для отправки не выбраны'
-                  : 'Ожидание файлов от сервера',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+
+            Padding(
+              padding: EdgeInsets.only(bottom: 8.0),
+              child: Text(
+                widget.isSending
+                    ? 'Файлы для отправки не выбраны'
+                    : 'Ожидание файлов от сервера',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
             ),
-            SizedBox(height: 8),
+
             if (widget.isSending)
               Text(
                 'Нажмите кнопку отправки в правом верхнем углу',

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'package:provider/provider.dart';
-
 import '../core/core.dart';
 
-import 'presentation/presentation.dart';
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -13,11 +11,11 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       theme: ThemeData(scaffoldBackgroundColor: AppColors.white),
-      home: ChangeNotifierProvider(
-        create: (_) => FileTransferService(),
-        child: OnboardScreen(),
-      ),
+      initialRoute: AppNavigation.initialRoute,
+      onGenerateRoute: AppNavigation.onGenerateRoute,
+      routes: AppNavigation.routes,
     );
   }
 }

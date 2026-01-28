@@ -38,6 +38,8 @@ dependencies:
 
   url_launcher: ^6.3.2
 
+  adaptive_dialog: ^2.6.0
+
   icons_launcher: ^3.0.3
 
 dev_dependencies:

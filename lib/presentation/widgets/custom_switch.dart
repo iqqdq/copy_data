@@ -63,11 +63,11 @@ class _CustomSwitchState extends State<CustomSwitch>
   @override
   Widget build(BuildContext context) {
     const double circleDiameter = 27.0;
-    const double padding = 2.0;
-    final double totalPadding = padding * 2;
-    final double availableWidth = widget.width - circleDiameter - totalPadding;
-    final double minLeft = -2.0;
-    final double maxLeft = minLeft + availableWidth;
+    final double circleTotalDiameter =
+        circleDiameter + (widget.borderWidth * 2);
+    final double visualPadding = 2.0;
+    final double minLeft = visualPadding;
+    final double maxLeft = widget.width - circleTotalDiameter - visualPadding;
 
     return GestureDetector(
       onTap: () {
@@ -103,8 +103,8 @@ class _CustomSwitchState extends State<CustomSwitch>
 
                 return Positioned(
                   left: leftPosition,
-                  top: padding,
-                  bottom: padding,
+                  top: visualPadding, // Используем тот же отступ сверху/снизу
+                  bottom: visualPadding,
                   child: Container(
                     width: circleDiameter,
                     height: circleDiameter,

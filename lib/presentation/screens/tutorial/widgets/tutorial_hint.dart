@@ -30,7 +30,7 @@ class TutorialHint extends StatelessWidget {
             child:
                 'If Wi‑Fi isn’t available, enable hotspot mode on one device and connect the other to it'
                     .toMultiColoredText(
-                      baseStyle: AppTypography.body16Light,
+                      baseStyle: AppTypography.body16Regular,
                       highlights: [
                         TextHighlight(
                           text: 'Wi‑Fi isn’t available',

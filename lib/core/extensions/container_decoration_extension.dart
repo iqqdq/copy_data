@@ -4,11 +4,11 @@ import '../core.dart';
 extension ContainerDecorationExtension on Widget {
   Widget withDecoration({
     Color? color,
-    BorderRadiusGeometry? borderRadius,
+    BorderRadius? borderRadius,
     double borderWidth = 1.0,
     Color borderColor = AppColors.black,
     BoxBorder? border,
-    Offset offset = const Offset(0, 0),
+    Offset offset = const Offset(0, 3),
     Color shadowColor = AppColors.black,
     double blurRadius = 0,
     double spreadRadius = 0,

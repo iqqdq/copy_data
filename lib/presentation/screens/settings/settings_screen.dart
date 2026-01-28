@@ -21,10 +21,24 @@ class SettingsScreen extends StatelessWidget {
           vertical: 8.0,
         ).copyWith(bottom: MediaQuery.of(context).padding.bottom),
         children: [
-          SettingsGuideTile(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => TutorialScreen()),
+          // TODO:
+          Padding(
+            padding: EdgeInsets.only(bottom: 16.0),
+            child: SettingsPremiumTile(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => PaywallScreen()),
+              ),
+            ),
+          ),
+
+          Padding(
+            padding: EdgeInsets.only(bottom: 16.0),
+            child: SettingsGuideTile(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => TutorialScreen()),
+              ),
             ),
           ),
 

@@ -25,7 +25,7 @@ abstract class AppTypography {
     letterSpacing: 20.0 * 0.01,
   );
 
-  static final body16Light = TextStyle(
+  static final body16Regular = TextStyle(
     fontFamily: fontFamily,
     fontWeight: FontWeight.w500,
     fontSize: 16.0,

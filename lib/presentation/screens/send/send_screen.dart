@@ -1,11 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
-
 import 'package:provider/provider.dart';
-import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
-
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -17,195 +14,236 @@ class SendScreen extends StatefulWidget {
 }
 
 class _SendScreenState extends State<SendScreen> {
-  bool _isConnecting = false;
-  bool _showScanner = true;
-  bool _isConnected = false;
-  QRViewController? _qrController;
-  final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
+  int _selectedIndex = 0;
+  bool _isSending = false;
+  bool _showProgress = false;
+  bool _autoSendTriggered = false;
+  bool _isQrLoading = true;
+  final Map<int, bool> _tabInitialized = {0: false, 1: false};
 
   @override
-  void reassemble() {
-    super.reassemble();
-    if (Platform.isAndroid) {
-      _qrController?.pauseCamera();
-    } else if (Platform.isIOS) {
-      _qrController?.resumeCamera();
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startServer();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final service = Provider.of<FileTransferService>(context);
+    if (service.connectedClients.isNotEmpty &&
+        !_autoSendTriggered &&
+        !_showProgress) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _triggerAutoSend(service);
+      });
     }
   }
 
-  Future<void> _onQRViewCreated(QRViewController controller) async {
-    // Обработка разрешений
-    controller.scannedDataStream.listen((scanData) async {
-      if (_isConnecting || _isConnected) return;
-
-      final qrData = scanData.code;
-      if (qrData != null && qrData.isNotEmpty) {
-        _qrController?.pauseCamera();
-        await _connectFromQR(qrData);
-      }
-    });
-
-    // Проверка фонарика
-    controller.getFlashStatus().then((isFlashOn) {
-      // Можно добавить управление вспышкой
-    });
+  Future<void> _startServer() async {
+    final service = Provider.of<FileTransferService>(context, listen: false);
+    if (!service.isServerRunning) {
+      await service.startServer();
+    }
+    if (mounted) {
+      Future.delayed(Duration(milliseconds: 300), () {
+        setState(() {
+          _isQrLoading = false;
+        });
+      });
+    }
   }
 
-  Future<void> _connectFromQR(String qrData) async {
+  Future<void> _triggerAutoSend(FileTransferService service) async {
     setState(() {
-      _isConnecting = true;
+      _showProgress = true;
+      _autoSendTriggered = true;
     });
+    await Future.delayed(Duration(milliseconds: 500));
+    await _pickAndSendMedia();
+  }
+
+  Future<void> _pickAndSendMedia() async {
+    final service = Provider.of<FileTransferService>(context, listen: false);
+    if (service.connectedClients.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Нет подключенных клиентов')));
+      }
+      return;
+    }
+
+    setState(() => _isSending = true);
 
     try {
-      final service = Provider.of<FileTransferService>(context, listen: false);
-
-      String serverIp;
-      int port = FileTransferService.PORT;
-
-      if (qrData.contains(':')) {
-        final parts = qrData.split(':');
-        serverIp = parts[0];
-        if (parts.length > 1) {
-          port = int.tryParse(parts[1]) ?? FileTransferService.PORT;
+      final pickedFiles = await ImagePicker().pickMultipleMedia();
+      final files = <File>[];
+      for (final image in pickedFiles) {
+        files.add(File(image.path));
+      }
+      if (files.isNotEmpty) {
+        await service.sendFilesToConnectedClient(files);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${files.length} файл(ов) отправлено клиенту'),
+              duration: Duration(seconds: 2),
+            ),
+          );
         }
       } else {
-        serverIp = qrData;
-      }
-
-      await service.connectToServer(serverIp, port: port);
-
-      // Добавляем небольшую задержку для лучшего UX
-      await Future.delayed(Duration(milliseconds: 500));
-
-      setState(() {
-        _isConnected = true;
-        _showScanner = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Успешно подключено к $serverIp:$port'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        setState(() {
+          _showProgress = false;
+          _autoSendTriggered = false;
+        });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Ошибка подключения: $e'),
+            content: Text('Ошибка отправки: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
-
-      // Возобновляем сканирование при ошибке
-      Future.delayed(Duration(seconds: 2), () {
-        _qrController?.resumeCamera();
-      });
-
       setState(() {
-        _isConnected = false;
+        _showProgress = false;
+        _autoSendTriggered = false;
       });
     } finally {
-      setState(() {
-        _isConnecting = false;
-      });
+      setState(() => _isSending = false);
     }
-  }
-
-  Widget _buildScannerView() {
-    return Stack(
-      children: [
-        QRView(
-          key: qrKey,
-          onQRViewCreated: _onQRViewCreated,
-          overlay: QrScannerOverlayShape(
-            borderColor: Color.fromRGBO(255, 220, 19, 1),
-            borderRadius: 32.0,
-            borderLength: 44.0,
-            borderWidth: 12.0,
-            cutOutSize: 250,
-          ),
-        ),
-
-        // Индикатор сканирования
-        if (_isConnecting)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.7),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                    SizedBox(height: 20),
-                    Text(
-                      'Подключение...',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-        // Верхняя панель
-        SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Transform.scale(
-                  scale: 1.5,
-                  child: CustomIconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: SvgPicture.asset(
-                      'assets/icons/cross.svg',
-                      width: 20.0,
-                      height: 20.0,
-                    ),
-                  ),
-                ),
-                CustomIconButton(
-                  onPressed: () => _qrController?.toggleFlash(),
-                  icon: SvgPicture.asset('assets/icons/flash.svg'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<FileTransferService>(context);
 
-    // Проверяем подключение и переключаемся на прогресс
-    if (service.isConnected && _showScanner) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        setState(() {
-          _showScanner = false;
-          _isConnected = true;
-        });
-      });
-    }
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: CustomAppBar(
+            title: _showProgress ? 'Sending files' : 'Send file',
+          ),
+          body: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              children: [
+                CustomTabBar(
+                  tabs: ['Transfer to IOS', 'Transfer to Android'],
+                  selectedIndex: _selectedIndex,
+                  onTabSelected: (index) {
+                    if (!_tabInitialized[index]!) {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                      Future.delayed(Duration(milliseconds: 300), () {
+                        if (mounted) {
+                          setState(() {
+                            _isQrLoading = true;
+                          });
+                          Future.delayed(Duration(milliseconds: 300), () {
+                            if (mounted) {
+                              setState(() {
+                                _isQrLoading = false;
+                                _tabInitialized[index] = true;
+                              });
+                            }
+                          });
+                        }
+                      });
+                    } else {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                    }
+                  },
+                ),
+                _showProgress
+                    ? ProgressScreen(isSending: true)
+                    : Expanded(
+                        child: AnimatedSwitcher(
+                          duration: Duration(milliseconds: 300),
+                          child: ListView(
+                            key: ValueKey<int>(_selectedIndex),
+                            padding: EdgeInsets.symmetric(vertical: 24.0)
+                                .copyWith(
+                                  bottom: MediaQuery.of(context).padding.bottom,
+                                ),
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: EdgeInsets.only(bottom: 16.0),
+                                    child: Image.asset(
+                                      'assets/images/send_file.png',
+                                      width: 74.0,
+                                      height: 74.0,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsets.only(bottom: 8.0),
+                                    child: Text(
+                                      _selectedIndex == 0
+                                          ? 'Send file to IOS device'
+                                          : 'Send file to Android device',
+                                      style: AppTypography.title20Medium,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsets.only(bottom: 8.0),
+                                    child:
+                                        'Tap Receive and scan the QR code on the sending device to get the files'
+                                            .toHighlightedText(
+                                              highlightedWords: ['Receive'],
+                                              baseStyle:
+                                                  AppTypography.body16Regular,
+                                              highlightColor: AppColors.accent,
+                                            ),
+                                  ),
+                                  Center(
+                                    child: Container(
+                                      height: 250,
+                                      width: 250,
+                                      alignment: Alignment.center,
+                                      child: _isQrLoading
+                                          ? CustomSpinnerLoader()
+                                          : QrImageView(
+                                              data: _selectedIndex == 0
+                                                  ? 'ios_${service.localIp}:${FileTransferService.PORT}'
+                                                  : 'android_${service.localIp}:${FileTransferService.PORT}',
+                                              version: QrVersions.auto,
+                                              backgroundColor: Colors.white,
+                                              size: 250,
+                                            ),
+                                    ),
+                                  ),
+                                ],
+                              ).withDecoration(
+                                color: AppColors.white,
+                                borderRadius: BorderRadius.circular(32.0),
+                                borderWidth: 3.0,
+                                borderColor: AppColors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24.0,
+                                  vertical: 32.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+              ],
+            ),
+          ),
+        ),
 
-    return Scaffold(
-      appBar: _showScanner ? null : CustomAppBar(title: 'Receiving files'),
-      body: _showScanner
-          ? _buildScannerView()
-          : ProgressScreen(isSending: false),
+        // ConnectionStatusAlert(isConnecting: false), // TODO:
+      ],
     );
   }
 }

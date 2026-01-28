@@ -15,27 +15,21 @@ class _OnboardScreenState extends State<OnboardScreen> {
     'fast_and_easy_file_transfer',
     'rate_your_experience',
     'connecting_devices',
-    'get_unlimited_transfers',
   ];
 
   final _titles = [
     'Fast & Easy File Transfer',
     'Rate Your Experience',
     'Fast Transfer via QR',
-    'Get Unlimited Transfers',
   ];
 
   final _subtitles = [
     'Share photos and videos instantly, no cables needed',
     'Help us improve by leaving a quick review',
     'Connect devices instantly and share files in seconds',
-    'Unlock all features just for\n'
-        r'$4.99/week',
   ];
 
   int _index = 0;
-
-  bool _value = false;
 
   @override
   Widget build(BuildContext context) {
@@ -60,17 +54,15 @@ class _OnboardScreenState extends State<OnboardScreen> {
                 child:
                     Column(
                       children: [
-                        _index == _titles.length - 1
-                            ? const SizedBox.shrink()
-                            : Padding(
-                                padding: EdgeInsets.only(bottom: 24.0),
-                                child: CustomSlider(
-                                  length: _titles.length - 1,
-                                  currentPage: _index,
-                                  onPageChanged: (index) =>
-                                      setState(() => _index = index),
-                                ),
-                              ),
+                        Padding(
+                          padding: EdgeInsets.only(bottom: 24.0),
+                          child: CustomSlider(
+                            length: _titles.length,
+                            currentPage: _index,
+                            onPageChanged: (index) =>
+                                setState(() => _index = index),
+                          ),
+                        ),
 
                         Padding(
                           padding: EdgeInsets.only(bottom: 8.0),
@@ -83,63 +75,22 @@ class _OnboardScreenState extends State<OnboardScreen> {
 
                         Padding(
                           padding: EdgeInsets.only(bottom: 16.0),
-                          child: _index == _subtitles.length - 1
-                              ? _subtitles[_index].toHighlightedText(
-                                  highlightedWords: [
-                                    r'$4.99/week',
-                                    r'$4.99/week with 3-day free trial',
-                                  ],
-                                  baseStyle: AppTypography.body16Light,
-                                  highlightColor: AppColors.accent,
-                                  textAlign: TextAlign.center,
-                                )
-                              : Text(
-                                  _subtitles[_index],
-                                  style: AppTypography.body16Light,
-                                  textAlign: TextAlign.center,
-                                ),
+                          child: Text(
+                            _subtitles[_index],
+                            style: AppTypography.body16Regular,
+                            textAlign: TextAlign.center,
+                          ),
                         ),
-
-                        _index == _titles.length - 1
-                            ? Padding(
-                                padding: EdgeInsets.only(bottom: 16.0),
-                                child:
-                                    Row(
-                                      children: [
-                                        Padding(
-                                          padding: EdgeInsets.only(right: 6.0),
-                                          child: Text(
-                                            '3-day free trial is enabled',
-                                            style: AppTypography.body16Light,
-                                          ),
-                                        ),
-
-                                        CustomSwitch(
-                                          value: _value,
-                                          onChanged: (value) =>
-                                              setState(() => _value = value),
-                                        ),
-                                      ],
-                                    ).withDecoration(
-                                      color: AppColors.white,
-                                      borderRadius: BorderRadius.circular(32.0),
-                                      borderWidth: 3.0,
-                                      borderColor: AppColors.black,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10.0,
-                                        vertical: 12.0,
-                                      ),
-                                    ),
-                              )
-                            : const SizedBox.shrink(),
 
                         CustomButton.primary(
                           title: 'Continue',
                           onPressed: () => _index == _titles.length - 1
                               ? Navigator.pushReplacement(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (context) => MainScreen(),
+                                  PageRouteBuilder(
+                                    pageBuilder: (context, _, _) =>
+                                        PaywallScreen(),
+                                    transitionDuration: Duration.zero,
                                   ),
                                 )
                               : setState(() => _index = (_index + 1)),

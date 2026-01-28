@@ -68,7 +68,7 @@ class TutorialScreen extends StatelessWidget {
                   )
                 : subtitles[index].toHighlightedText(
                     highlightedWords: highlights[index],
-                    baseStyle: AppTypography.body16Light,
+                    baseStyle: AppTypography.body16Regular,
                     highlightColor: AppColors.accent,
                   ),
             hint: index == 1

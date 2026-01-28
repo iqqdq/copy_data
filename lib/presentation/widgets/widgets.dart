@@ -6,3 +6,4 @@ export 'custom_slider.dart';
 export 'custom_spinner_loader.dart';
 export 'custom_switch.dart';
 export 'custom_tab_bar.dart';
+export 'custom_toast.dart';

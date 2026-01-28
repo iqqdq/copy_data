@@ -100,11 +100,7 @@ class _CustomButtonState extends State<CustomButton> {
 
   void _handleTapUp(TapUpDetails details) {
     _pressTimer?.cancel();
-    _pressTimer = Timer(const Duration(milliseconds: 150), () {
-      if (mounted) {
-        setState(() => _isPressed = false);
-      }
-    });
+    setState(() => _isPressed = false);
   }
 
   void _handleTapCancel() {
