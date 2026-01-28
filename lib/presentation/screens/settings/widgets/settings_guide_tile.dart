@@ -40,8 +40,7 @@ class SettingsGuideTile extends StatelessWidget {
           child: 'Learn how to send and receive files step by step'
               .toHighlightedText(
                 highlightedWords: ['Learn', 'send and receive'],
-                baseStyle: AppTypography.body16Regular,
-                highlightColor: AppColors.accent,
+                style: AppTypography.body16Regular,
               ),
         ),
 

@@ -49,8 +49,7 @@ class PermissionAlert extends StatelessWidget {
                         'To send or receive data, please allow the necessary permissions.'
                             .toHighlightedText(
                               highlightedWords: ['send', 'or', 'receive'],
-                              baseStyle: AppTypography.body16Regular,
-                              highlightColor: AppColors.accent,
+                              style: AppTypography.body16Regular,
                             ),
                   ),
 

@@ -25,20 +25,14 @@ class SettingsScreen extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(bottom: 16.0),
             child: SettingsPremiumTile(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => PaywallScreen()),
-              ),
+              onPressed: () => Navigator.pushNamed(context, AppRoutes.paywall),
             ),
           ),
 
           Padding(
             padding: EdgeInsets.only(bottom: 16.0),
             child: SettingsGuideTile(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => TutorialScreen()),
-              ),
+              onPressed: () => Navigator.pushNamed(context, AppRoutes.tutorial),
             ),
           ),
 
@@ -46,12 +40,8 @@ class SettingsScreen extends StatelessWidget {
             padding: EdgeInsets.only(bottom: 16.0),
             child: CustomButton.primary(
               title: 'Subscription plans',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SubscriptionPlansScreen(),
-                ),
-              ),
+              onPressed: () =>
+                  Navigator.pushNamed(context, AppRoutes.subscriptionPlans),
             ),
           ),
 

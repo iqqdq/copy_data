@@ -4,27 +4,25 @@ import '../core.dart';
 extension StringHighlighting on String {
   Widget toHighlightedText({
     required List<String> highlightedWords,
-    required TextStyle baseStyle,
+    required TextStyle style,
     Color highlightColor = AppColors.accent,
     TextAlign? textAlign,
   }) {
     return _buildRichText(
       text: this,
       highlightedWords: highlightedWords,
-      baseStyle: baseStyle,
+      style: style,
       highlightColor: highlightColor,
       textAlign: textAlign,
     );
   }
 
   Widget toMultiColoredText({
-    required TextStyle baseStyle,
+    required TextStyle style,
     required List<TextHighlight> highlights,
     TextAlign? textAlign,
   }) {
-    final defaultBaseStyle = baseStyle.copyWith(
-      color: baseStyle.color ?? AppColors.black,
-    );
+    final defaultstyle = style.copyWith(color: style.color ?? AppColors.black);
     final spans = <TextSpan>[];
     String text = this;
 
@@ -44,14 +42,14 @@ extension StringHighlighting on String {
       if (index != -1) {
         if (index > 0) {
           spans.add(
-            TextSpan(text: text.substring(0, index), style: defaultBaseStyle),
+            TextSpan(text: text.substring(0, index), style: defaultstyle),
           );
         }
 
         spans.add(
           TextSpan(
             text: text.substring(index, index + highlight.text.length),
-            style: defaultBaseStyle.copyWith(color: highlight.color),
+            style: defaultstyle.copyWith(color: highlight.color),
           ),
         );
 
@@ -60,26 +58,24 @@ extension StringHighlighting on String {
     }
 
     if (text.isNotEmpty) {
-      spans.add(TextSpan(text: text, style: defaultBaseStyle));
+      spans.add(TextSpan(text: text, style: defaultstyle));
     }
 
     return RichText(
       textAlign: textAlign ?? TextAlign.start,
-      text: TextSpan(style: defaultBaseStyle, children: spans),
+      text: TextSpan(style: defaultstyle, children: spans),
     );
   }
 
   RichText _buildRichText({
     required String text,
     required List<String> highlightedWords,
-    required TextStyle baseStyle,
+    required TextStyle style,
     required Color highlightColor,
     TextAlign? textAlign,
   }) {
-    final defaultBaseStyle = baseStyle.copyWith(
-      color: baseStyle.color ?? AppColors.black,
-    );
-    final highlightedStyle = defaultBaseStyle.copyWith(color: highlightColor);
+    final defaultstyle = style.copyWith(color: style.color ?? AppColors.black);
+    final highlightedStyle = defaultstyle.copyWith(color: highlightColor);
     final spans = <TextSpan>[];
     String remainingText = text;
 
@@ -91,7 +87,7 @@ extension StringHighlighting on String {
           spans.add(
             TextSpan(
               text: remainingText.substring(0, index),
-              style: defaultBaseStyle,
+              style: defaultstyle,
             ),
           );
         }
@@ -108,12 +104,12 @@ extension StringHighlighting on String {
     }
 
     if (remainingText.isNotEmpty) {
-      spans.add(TextSpan(text: remainingText, style: defaultBaseStyle));
+      spans.add(TextSpan(text: remainingText, style: defaultstyle));
     }
 
     return RichText(
       textAlign: textAlign ?? TextAlign.start,
-      text: TextSpan(style: defaultBaseStyle, children: spans),
+      text: TextSpan(style: defaultstyle, children: spans),
     );
   }
 }

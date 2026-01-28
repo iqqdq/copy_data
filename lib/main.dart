@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+
 import 'package:provider/provider.dart';
 
 import 'app.dart';
 import 'core/core.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   runApp(
     MultiProvider(
@@ -14,7 +18,7 @@ void main() async {
         // ChangeNotifierProvider(create: (_) => PurchaseService()), // TODO: UNCOMMENT
         ChangeNotifierProvider(create: (_) => FileTransferService()),
       ],
-      child: App(),
+      child: const App(),
     ),
   );
 }

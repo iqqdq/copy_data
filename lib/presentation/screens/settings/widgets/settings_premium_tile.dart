@@ -81,8 +81,7 @@ class _SettingsPremiumTileState extends State<SettingsPremiumTile> {
                               Expanded(
                                 child: 'Upgrade to Premium'.toHighlightedText(
                                   highlightedWords: ['Premium'],
-                                  baseStyle: AppTypography.title20Medium,
-                                  highlightColor: AppColors.accent,
+                                  style: AppTypography.title20Medium,
                                 ),
                               ),
                             ],
@@ -91,8 +90,7 @@ class _SettingsPremiumTileState extends State<SettingsPremiumTile> {
                         'Unlock full access to unlimited file transfers on all your devices'
                             .toHighlightedText(
                               highlightedWords: ['full', 'access'],
-                              baseStyle: AppTypography.body16Regular,
-                              highlightColor: AppColors.accent,
+                              style: AppTypography.body16Regular,
                             ),
                       ],
                     ),

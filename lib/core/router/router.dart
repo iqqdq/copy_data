@@ -11,7 +11,7 @@ abstract class AppRoutes {
   static String get receive => '/receive';
   static String get send => '/send';
   static String get settings => '/settings';
-  static String get subscriptionPlan => '/subscription_plans';
+  static String get subscriptionPlans => '/subscription_plans';
   static String get tutorial => '/tutorial';
 }
 
@@ -20,6 +20,12 @@ abstract class AppNavigation {
 
   static final routes = <String, Widget Function(BuildContext)>{
     AppRoutes.splash: (_) => const SplashScreen(),
+    AppRoutes.main: (_) => const MainScreen(),
+    AppRoutes.receive: (_) => const ReceiveScreen(),
+    AppRoutes.send: (_) => const SendScreen(),
+    AppRoutes.settings: (_) => const SettingsScreen(),
+    AppRoutes.subscriptionPlans: (_) => const SubscriptionPlansScreen(),
+    AppRoutes.tutorial: (_) => const TutorialScreen(),
   };
 
   static Route? onGenerateRoute(RouteSettings settings) {
@@ -37,34 +43,10 @@ abstract class AppNavigation {
       );
     }
 
-    if (settings.name == AppRoutes.main) {
-      return MaterialPageRoute(builder: (_) => const MainScreen());
-    }
-
     if (settings.name == AppRoutes.progress) {
       return MaterialPageRoute(
         builder: (_) => ProgressScreen(isSending: settings.arguments as bool),
       );
-    }
-
-    if (settings.name == AppRoutes.receive) {
-      return MaterialPageRoute(builder: (_) => const ReceiveScreen());
-    }
-
-    if (settings.name == AppRoutes.send) {
-      return MaterialPageRoute(builder: (_) => const SendScreen());
-    }
-
-    if (settings.name == AppRoutes.settings) {
-      return MaterialPageRoute(builder: (_) => const SettingsScreen());
-    }
-
-    if (settings.name == AppRoutes.subscriptionPlan) {
-      return MaterialPageRoute(builder: (_) => const SubscriptionPlansScreen());
-    }
-
-    if (settings.name == AppRoutes.tutorial) {
-      return MaterialPageRoute(builder: (_) => const TutorialScreen());
     }
 
     return null;

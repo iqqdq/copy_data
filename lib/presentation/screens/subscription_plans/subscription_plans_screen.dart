@@ -44,8 +44,7 @@ class _SubscriptionPlansScreenState extends State<SubscriptionPlansScreen> {
               SubscriptionTile(
                 child: subscriptions[index].toHighlightedText(
                   highlightedWords: [r'$4.99/week'],
-                  baseStyle: AppTypography.body16Regular,
-                  highlightColor: AppColors.accent,
+                  style: AppTypography.body16Regular,
                 ),
                 onPressed: () {
                   // TODO:

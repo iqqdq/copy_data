@@ -36,8 +36,7 @@ class ConnectionStatusAlert extends StatelessWidget {
                     child: 'Please wait while we link your devices'
                         .toHighlightedText(
                           highlightedWords: ['link', 'your', 'devices'],
-                          baseStyle: AppTypography.body16Regular,
-                          highlightColor: AppColors.accent,
+                          style: AppTypography.body16Regular,
                         ),
                   ),
 

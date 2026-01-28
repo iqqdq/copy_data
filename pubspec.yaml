@@ -14,6 +14,13 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
+  shared_preferences: ^2.5.4
+  flutter_svg: ^2.2.3
+  url_launcher: ^6.3.2
+  adaptive_dialog: ^2.6.0
+  icons_launcher: ^3.0.3
+  flutter_native_splash: ^2.4.7
+
   provider: ^6.1.5
 
   network_info_plus: ^7.0.0
@@ -33,14 +40,6 @@ dependencies:
   mime: ^2.0.0
 
   ffmpeg_kit_flutter_new: ^4.1.0
-
-  flutter_svg: ^2.2.3
-
-  url_launcher: ^6.3.2
-
-  adaptive_dialog: ^2.6.0
-
-  icons_launcher: ^3.0.3
 
 dev_dependencies:
   flutter_test:
@@ -65,6 +64,18 @@ flutter:
           weight: 400
         - asset: assets/fonts/morn-medium.ttf
           weight: 500
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/images/splash.png
+  ios_content_mode: "center"
+  android_gravity: center
+
+  android_12:
+    image: assets/images/splash.png
+    color: "#ffffff"
+
+  web: false
 
 icons_launcher:
   image_path: "assets/app_icon.png"

@@ -55,8 +55,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                                       r'$4.99/week',
                                       r'$4.99/week with 3-day free trial',
                                     ],
-                                    baseStyle: AppTypography.body16Regular,
-                                    highlightColor: AppColors.accent,
+                                    style: AppTypography.body16Regular,
                                     textAlign: TextAlign.center,
                                   ),
                         ),
@@ -95,12 +94,12 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         CustomButton.primary(
                           title: 'Continue',
                           isLoading: false, // TODO:
-                          onPressed: () => Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => MainScreen(),
-                            ),
-                          ),
+                          onPressed: () => Navigator.canPop(context)
+                              ? Navigator.pop(context)
+                              : Navigator.pushReplacementNamed(
+                                  context,
+                                  AppRoutes.main,
+                                ),
                         ),
                       ],
                     ).withDecoration(

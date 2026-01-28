@@ -200,9 +200,8 @@ class _SendScreenState extends State<SendScreen> {
                                         'Tap Receive and scan the QR code on the sending device to get the files'
                                             .toHighlightedText(
                                               highlightedWords: ['Receive'],
-                                              baseStyle:
+                                              style:
                                                   AppTypography.body16Regular,
-                                              highlightColor: AppColors.accent,
                                             ),
                                   ),
                                   Center(

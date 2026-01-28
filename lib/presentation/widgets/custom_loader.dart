@@ -143,15 +143,11 @@ class _LoaderCircle extends AnimatedWidget {
   Widget build(BuildContext context) {
     return Transform.translate(
       offset: Offset(0.0, jumpAnimation.value),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: const SizedBox.shrink().withDecoration(
-          color: _currentColor,
-          borderRadius: BorderRadius.circular(size / 2),
-          borderWidth: 2.0,
-          borderColor: AppColors.black,
-        ),
+      child: SizedBox(width: size, height: size).withDecoration(
+        color: _currentColor,
+        borderRadius: BorderRadius.circular(size / 2),
+        borderWidth: 2.0,
+        borderColor: AppColors.black,
       ),
     );
   }

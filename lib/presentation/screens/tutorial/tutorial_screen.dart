@@ -68,8 +68,7 @@ class TutorialScreen extends StatelessWidget {
                   )
                 : subtitles[index].toHighlightedText(
                     highlightedWords: highlights[index],
-                    baseStyle: AppTypography.body16Regular,
-                    highlightColor: AppColors.accent,
+                    style: AppTypography.body16Regular,
                   ),
             hint: index == 1
                 ? TutorialHint(
@@ -87,15 +86,10 @@ and connect the other to it.
               ? CustomButton.primary(
                   title: 'Got it',
                   onPressed: () =>
-                      // TODO: REPLACE WITH NAMED ROUTE & SAVE STATUS
+                      // TODO: SAVE STATUS
                       Navigator.canPop(context)
                       ? Navigator.pop(context)
-                      : Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (builder) => const MainScreen(),
-                          ),
-                        ),
+                      : Navigator.pushNamed(context, AppRoutes.main),
                 )
               : item;
         },

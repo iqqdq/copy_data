@@ -63,10 +63,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             automaticallyImplyLeading: false,
             actions: [
               CustomIconButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => SettingsScreen()),
-                ),
+                onPressed: () =>
+                    Navigator.pushNamed(context, AppRoutes.settings),
                 icon: SvgPicture.asset(
                   'assets/icons/setting.svg',
                   colorFilter: ColorFilter.mode(
@@ -126,17 +124,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     // Если все разрешения получены, переходим к экрану
     if (mounted) {
-      if (roleIndex == 0) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => SendScreen()),
-        );
-      } else {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => ReceiveScreen()),
-        );
-      }
+      Navigator.pushNamed(
+        context,
+        roleIndex == 0 ? AppRoutes.send : AppRoutes.receive,
+      );
     }
   }
 
@@ -394,25 +385,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         break;
     }
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              openAppSettings();
-            },
-            child: Text('Open Settings'),
-          ),
-        ],
-      ),
-    );
+    SettingsDialog.show(context, title: title, message: message);
   }
 }
