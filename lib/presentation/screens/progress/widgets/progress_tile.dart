@@ -101,14 +101,10 @@ class ProgressTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(16.0),
               child: LinearProgressIndicator(
                 value: progress / 100,
-                backgroundColor: AppColors.extraLightGray,
                 minHeight: 8.0,
+                backgroundColor: AppColors.extraLightGray,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  isCancelled
-                      ? AppColors.extraLightGray
-                      : (isCompleted
-                            ? AppColors.accent
-                            : AppColors.extraLightGray),
+                  isCancelled ? AppColors.extraLightGray : AppColors.accent,
                 ),
               ),
             ),

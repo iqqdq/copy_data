@@ -11,7 +11,7 @@ class CustomLoader extends StatefulWidget {
     super.key,
     this.animationDuration = const Duration(milliseconds: 500),
     this.circleSize = 10.0,
-    this.jumpHeight = 12.0,
+    this.jumpHeight = 10.0,
   });
 
   @override
@@ -137,7 +137,7 @@ class _LoaderCircle extends AnimatedWidget {
   }) : super(listenable: Listenable.merge([jumpAnimation, colorState]));
 
   Color get _currentColor =>
-      colorState.value == 1 ? AppColors.accent : AppColors.white;
+      colorState.value == 1 ? AppColors.accent : AppColors.lightBlue;
 
   @override
   Widget build(BuildContext context) {
@@ -145,8 +145,9 @@ class _LoaderCircle extends AnimatedWidget {
       offset: Offset(0.0, jumpAnimation.value),
       child: SizedBox(width: size, height: size).withDecoration(
         color: _currentColor,
-        borderRadius: BorderRadius.circular(size / 2),
+        borderRadius: BorderRadius.circular(size),
         borderWidth: 2.0,
+        offset: Offset(0, 0),
         borderColor: AppColors.black,
       ),
     );

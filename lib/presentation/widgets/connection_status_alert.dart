@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/core.dart';
-import '../../../presentation.dart';
+import '../../core/core.dart';
+import '../presentation.dart';
 
 class ConnectionStatusAlert extends StatelessWidget {
   final bool isConnecting;

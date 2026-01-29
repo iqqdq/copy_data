@@ -18,8 +18,6 @@ class ReceiveScreen extends StatefulWidget {
 
 class _ReceiveScreenState extends State<ReceiveScreen> {
   bool _isConnecting = false;
-  bool _showScanner = true;
-  bool _isConnected = false;
   QRViewController? _qrController;
   final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
 
@@ -34,9 +32,8 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
   }
 
   Future<void> _onQRViewCreated(QRViewController controller) async {
-    // Обработка разрешений
     controller.scannedDataStream.listen((scanData) async {
-      if (_isConnecting || _isConnected) return;
+      if (_isConnecting) return;
 
       final qrData = scanData.code
           ?.replaceAll('android_', '')
@@ -46,17 +43,10 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
         await _connectFromQR(qrData);
       }
     });
-
-    // Проверка фонарика
-    controller.getFlashStatus().then((isFlashOn) {
-      // Можно добавить управление вспышкой
-    });
   }
 
   Future<void> _connectFromQR(String qrData) async {
-    setState(() {
-      _isConnecting = true;
-    });
+    setState(() => _isConnecting = true);
 
     try {
       final service = Provider.of<FileTransferService>(context, listen: false);
@@ -74,140 +64,86 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
         serverIp = qrData;
       }
 
+      // Подключение к серверу
       await service.connectToServer(serverIp, port: port);
 
-      // Добавляем небольшую задержку для лучшего UX
-      await Future.delayed(Duration(milliseconds: 500));
+      // Задержка 2 секунды перед установкой флага подключения
+      await Future.delayed(const Duration(seconds: 2));
 
-      setState(() {
-        _isConnected = true;
-        _showScanner = false;
-      });
-
+      // Переход на ProgressScreen
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Успешно подключено к $serverIp:$port'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        setState(() => _isConnecting = true);
+
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            final bool isSending = false;
+            Navigator.pushReplacementNamed(
+              context,
+              AppRoutes.progress,
+              arguments: isSending,
+            );
+          }
+        });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка подключения: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-
       // Возобновляем сканирование при ошибке
-      Future.delayed(Duration(seconds: 2), () {
-        _qrController?.resumeCamera();
-      });
-
-      setState(() {
-        _isConnected = false;
-      });
-    } finally {
-      setState(() {
-        _isConnecting = false;
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() => _isConnecting = false);
+          _qrController?.resumeCamera();
+        }
       });
     }
-  }
-
-  Widget _buildScannerView() {
-    return Stack(
-      children: [
-        QRView(
-          key: qrKey,
-          onQRViewCreated: _onQRViewCreated,
-          overlay: QrScannerOverlayShape(
-            borderColor: Color.fromRGBO(255, 220, 19, 1),
-            borderRadius: 32.0,
-            borderLength: 44.0,
-            borderWidth: 12.0,
-            cutOutSize: 250,
-          ),
-        ),
-
-        // Индикатор сканирования
-        if (_isConnecting)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.7),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                    SizedBox(height: 20),
-                    Text(
-                      'Подключение...',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-        // Верхняя панель
-        SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Transform.scale(
-                  scale: 1.5,
-                  child: CustomIconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: SvgPicture.asset(
-                      'assets/icons/cross.svg',
-                      width: 20.0,
-                      height: 20.0,
-                    ),
-                  ),
-                ),
-                CustomIconButton(
-                  onPressed: () => _qrController?.toggleFlash(),
-                  icon: SvgPicture.asset('assets/icons/flash.svg'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final service = Provider.of<FileTransferService>(context);
-
-    // Проверяем подключение и переключаемся на прогресс
-    if (service.isConnected && _showScanner) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        setState(() {
-          _showScanner = false;
-          _isConnected = true;
-        });
-      });
-    }
-
     return Scaffold(
-      appBar: _showScanner ? null : CustomAppBar(title: 'Receiving files'),
-      body: _showScanner
-          ? _buildScannerView()
-          : ProgressScreen(isSending: false),
+      body: Stack(
+        children: [
+          QRView(
+            key: qrKey,
+            onQRViewCreated: _onQRViewCreated,
+            overlay: QrScannerOverlayShape(
+              borderColor: const Color.fromRGBO(255, 220, 19, 1),
+              borderRadius: 32.0,
+              borderLength: 44.0,
+              borderWidth: 12.0,
+              cutOutSize: 250,
+            ),
+          ),
+
+          // ConnectionStatusAlert при подключении к серверу
+          if (_isConnecting) ConnectionStatusAlert(isConnecting: _isConnecting),
+
+          // Верхняя панель
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Transform.scale(
+                    scale: 1.5,
+                    child: CustomIconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: SvgPicture.asset(
+                        'assets/icons/cross.svg',
+                        width: 20.0,
+                        height: 20.0,
+                      ),
+                    ),
+                  ),
+                  CustomIconButton(
+                    onPressed: () => _qrController?.toggleFlash(),
+                    icon: SvgPicture.asset('assets/icons/flash.svg'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -48,28 +48,35 @@ class _ProgressScreenState extends State<ProgressScreen> {
     required FileTransferService service,
     required String transferId,
   }) async {
-    setState(() {
-      _cancelledTransfers[transferId] = true;
-    });
+    await DestructiveDialog.show(
+      context,
+      message: widget.isSending
+          ? 'Are you sure you want to stop sending files? Your transfer will be interrupted'
+          : 'Are you sure you want to stop receiving files? Your transfer will be interrupted',
+      cancelTitle: widget.isSending ? 'Keep sending' : 'Keep receiving',
+      onDestructivePressed: () async {
+        setState(() => _cancelledTransfers[transferId] = true);
 
-    await service.cancelTransfer(transferId);
+        await service.cancelTransfer(transferId);
 
-    if (mounted) {
-      CustomToast.showToast(
-        context: context,
-        message: widget.isSending
-            ? 'The sender canceled the transfer'
-            : 'The receiver canceled the transfer',
-      );
+        if (mounted) {
+          // TODO: SEND MESSAGE TO SENDER/RECEIVER
+          CustomToast.showToast(
+            context: context,
+            message: widget.isSending
+                ? 'The sender canceled the transfer'
+                : 'The receiver canceled the transfer',
+          );
 
-      // Обновляем состояние кнопки после отмены
-      final showButton = _checkShowGoToMainMenu(service);
-      if (showButton != _showGoToMainMenuButton) {
-        setState(() {
-          _showGoToMainMenuButton = showButton;
-        });
-      }
-    }
+          // Обновляем состояние кнопки после отмены
+          final showButton = _checkShowGoToMainMenu(service);
+
+          if (showButton != _showGoToMainMenuButton) {
+            setState(() => _showGoToMainMenuButton = showButton);
+          }
+        }
+      },
+    );
   }
 
   @override
@@ -103,56 +110,51 @@ class _ProgressScreenState extends State<ProgressScreen> {
         .toList();
 
     return Scaffold(
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    if (photoTransfers.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 16.0),
-                        child: ProgressTile(
-                          isPhoto: true,
-                          isSending: widget.isSending,
-                          service: service,
-                          transfers: transfers,
-                          cancelledTransfers: _cancelledTransfers,
-                          onTransferCancel: (id) =>
-                              _cancelTransfer(service: service, transferId: id),
-                        ),
-                      ),
-
-                    // Карточка для видео
-                    if (videoTransfers.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 24.0),
-                        child: ProgressTile(
-                          isPhoto: false,
-                          isSending: widget.isSending,
-                          service: service,
-                          transfers: transfers,
-                          cancelledTransfers: _cancelledTransfers,
-                          onTransferCancel: (id) =>
-                              _cancelTransfer(service: service, transferId: id),
-                        ),
-                      ),
-
-                    // Кнопка "В главное меню" показывается только при завершении всех передач
-                    if (_showGoToMainMenuButton && transfers.isNotEmpty)
-                      CustomButton.primary(
-                        title: 'Go to main menu',
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+      appBar: CustomAppBar(
+        title: widget.isSending ? 'Sending files' : 'Receiving files',
       ),
+      body: photoTransfers.isEmpty && videoTransfers.isEmpty
+          ? const Center(child: CustomLoader())
+          : ListView(
+              padding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
+              children: [
+                if (photoTransfers.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 16.0),
+                    child: ProgressTile(
+                      isPhoto: true,
+                      isSending: widget.isSending,
+                      service: service,
+                      transfers: transfers,
+                      cancelledTransfers: _cancelledTransfers,
+                      onTransferCancel: (id) =>
+                          _cancelTransfer(service: service, transferId: id),
+                    ),
+                  ),
+
+                // Карточка для видео
+                if (videoTransfers.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 24.0),
+                    child: ProgressTile(
+                      isPhoto: false,
+                      isSending: widget.isSending,
+                      service: service,
+                      transfers: transfers,
+                      cancelledTransfers: _cancelledTransfers,
+                      onTransferCancel: (id) =>
+                          _cancelTransfer(service: service, transferId: id),
+                    ),
+                  ),
+
+                // Кнопка "В главное меню" показывается только при завершении всех передач
+                if (_showGoToMainMenuButton && transfers.isNotEmpty)
+                  CustomButton.primary(
+                    title: 'Go to main menu',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+              ],
+            ),
     );
   }
 }

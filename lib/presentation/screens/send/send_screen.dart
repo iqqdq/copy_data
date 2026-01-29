@@ -15,10 +15,11 @@ class SendScreen extends StatefulWidget {
 
 class _SendScreenState extends State<SendScreen> {
   int _selectedIndex = 0;
-  bool _isSending = false;
-  bool _showProgress = false;
+  bool _showConnectionAlert = false;
   bool _autoSendTriggered = false;
   bool _isQrLoading = true;
+  bool _isClientConnected = false;
+  bool _isConnecting = false;
   final Map<int, bool> _tabInitialized = {0: false, 1: false};
 
   @override
@@ -33,9 +34,16 @@ class _SendScreenState extends State<SendScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final service = Provider.of<FileTransferService>(context);
-    if (service.connectedClients.isNotEmpty &&
-        !_autoSendTriggered &&
-        !_showProgress) {
+
+    // Проверяем подключение клиента
+    if (service.connectedClients.isNotEmpty && !_isClientConnected) {
+      _handleClientConnected();
+    } else if (service.connectedClients.isEmpty && _isClientConnected) {
+      _handleClientDisconnected();
+    }
+
+    // Автоматическая отправка при первом подключении
+    if (service.connectedClients.isNotEmpty && !_autoSendTriggered) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _triggerAutoSend(service);
       });
@@ -56,11 +64,42 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
-  Future<void> _triggerAutoSend(FileTransferService service) async {
+  Future<void> _handleClientConnected() async {
+    if (_isConnecting) return;
+
     setState(() {
-      _showProgress = true;
-      _autoSendTriggered = true;
+      _showConnectionAlert = true;
+      _isClientConnected = true;
     });
+
+    if (mounted) {
+      setState(() => _isConnecting = true);
+
+      // Задержка 2 секунды перед установкой флага подключения
+      await Future.delayed(Duration(seconds: 2));
+
+      setState(() => _isConnecting = false);
+
+      // Переход на ProgressScreen
+      Future.delayed(const Duration(seconds: 1), () async {
+        await _pickAndSendMedia();
+      });
+    }
+  }
+
+  void _handleClientDisconnected() {
+    setState(() {
+      _isClientConnected = false;
+      _autoSendTriggered = false;
+      _showConnectionAlert = false;
+      _isConnecting = false;
+    });
+  }
+
+  Future<void> _triggerAutoSend(FileTransferService service) async {
+    if (_isConnecting) return;
+
+    setState(() => _autoSendTriggered = true);
     await Future.delayed(Duration(milliseconds: 500));
     await _pickAndSendMedia();
   }
@@ -69,52 +108,53 @@ class _SendScreenState extends State<SendScreen> {
     final service = Provider.of<FileTransferService>(context, listen: false);
     if (service.connectedClients.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Нет подключенных клиентов')));
+        CustomToast.showToast(
+          context: context,
+          message: 'The recipient was disconnected',
+        );
       }
       return;
     }
 
-    setState(() => _isSending = true);
-
     try {
       final pickedFiles = await ImagePicker().pickMultipleMedia();
       final files = <File>[];
+
       for (final image in pickedFiles) {
         files.add(File(image.path));
       }
+
+      // TODO: SEND FILES TO PROGRESS ?
       if (files.isNotEmpty) {
-        await service.sendFilesToConnectedClient(files);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${files.length} файл(ов) отправлено клиенту'),
-              duration: Duration(seconds: 2),
-            ),
+          final bool isSending = true;
+          Navigator.pushReplacementNamed(
+            context,
+            AppRoutes.progress,
+            arguments: isSending,
           );
         }
+
+        await service.sendFilesToConnectedClient(files);
+
+        // if (mounted) {
+        //   CustomToast.showToast(
+        //     context: context,
+        //     message: '${files.length} файл(ов) отправлено клиенту',
+        //   );
+        // }
       } else {
-        setState(() {
-          _showProgress = false;
-          _autoSendTriggered = false;
-        });
+        setState(() => _autoSendTriggered = false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка отправки: $e'),
-            backgroundColor: Colors.red,
-          ),
+        CustomToast.showToast(
+          context: context,
+          message: 'There was an error while sending files',
         );
       }
-      setState(() {
-        _showProgress = false;
-        _autoSendTriggered = false;
-      });
-    } finally {
-      setState(() => _isSending = false);
+
+      setState(() => _autoSendTriggered = false);
     }
   }
 
@@ -125,9 +165,7 @@ class _SendScreenState extends State<SendScreen> {
     return Stack(
       children: [
         Scaffold(
-          appBar: CustomAppBar(
-            title: _showProgress ? 'Sending files' : 'Send file',
-          ),
+          appBar: CustomAppBar(title: 'Send file'),
           body: Padding(
             padding: EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
@@ -162,86 +200,84 @@ class _SendScreenState extends State<SendScreen> {
                     }
                   },
                 ),
-                _showProgress
-                    ? ProgressScreen(isSending: true)
-                    : Expanded(
-                        child: AnimatedSwitcher(
-                          duration: Duration(milliseconds: 300),
-                          child: ListView(
-                            key: ValueKey<int>(_selectedIndex),
-                            padding: EdgeInsets.symmetric(vertical: 24.0)
-                                .copyWith(
-                                  bottom: MediaQuery.of(context).padding.bottom,
-                                ),
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Padding(
-                                    padding: EdgeInsets.only(bottom: 16.0),
-                                    child: Image.asset(
-                                      'assets/images/send_file.png',
-                                      width: 74.0,
-                                      height: 74.0,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: EdgeInsets.only(bottom: 8.0),
-                                    child: Text(
-                                      _selectedIndex == 0
-                                          ? 'Send file to IOS device'
-                                          : 'Send file to Android device',
-                                      style: AppTypography.title20Medium,
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: EdgeInsets.only(bottom: 8.0),
-                                    child:
-                                        'Tap Receive and scan the QR code on the sending device to get the files'
-                                            .toHighlightedText(
-                                              highlightedWords: ['Receive'],
-                                              style:
-                                                  AppTypography.body16Regular,
-                                            ),
-                                  ),
-                                  Center(
-                                    child: Container(
-                                      height: 250,
-                                      width: 250,
-                                      alignment: Alignment.center,
-                                      child: _isQrLoading
-                                          ? CustomSpinnerLoader()
-                                          : QrImageView(
-                                              data: _selectedIndex == 0
-                                                  ? 'ios_${service.localIp}:${FileTransferService.PORT}'
-                                                  : 'android_${service.localIp}:${FileTransferService.PORT}',
-                                              version: QrVersions.auto,
-                                              backgroundColor: Colors.white,
-                                              size: 250,
-                                            ),
-                                    ),
-                                  ),
-                                ],
-                              ).withDecoration(
-                                color: AppColors.white,
-                                borderRadius: BorderRadius.circular(32.0),
-                                borderWidth: 3.0,
-                                borderColor: AppColors.black,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24.0,
-                                  vertical: 32.0,
-                                ),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: Duration(milliseconds: 300),
+                    child: ListView(
+                      key: ValueKey<int>(_selectedIndex),
+                      padding: EdgeInsets.symmetric(
+                        vertical: 24.0,
+                      ).copyWith(bottom: MediaQuery.of(context).padding.bottom),
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 16.0),
+                              child: Image.asset(
+                                'assets/images/send_file.png',
+                                width: 74.0,
+                                height: 74.0,
                               ),
-                            ],
+                            ),
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 8.0),
+                              child: Text(
+                                _selectedIndex == 0
+                                    ? 'Send file to IOS device'
+                                    : 'Send file to Android device',
+                                style: AppTypography.title20Medium,
+                              ),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 8.0),
+                              child:
+                                  'Tap Receive and scan the QR code on the sending device to get the files'
+                                      .toHighlightedText(
+                                        highlightedWords: ['Receive'],
+                                        style: AppTypography.body16Regular,
+                                      ),
+                            ),
+                            Center(
+                              child: Container(
+                                height: 250,
+                                width: 250,
+                                alignment: Alignment.center,
+                                child: _isQrLoading
+                                    ? CustomSpinnerLoader()
+                                    : QrImageView(
+                                        data: _selectedIndex == 0
+                                            ? 'ios_${service.localIp}:${FileTransferService.PORT}'
+                                            : 'android_${service.localIp}:${FileTransferService.PORT}',
+                                        version: QrVersions.auto,
+                                        backgroundColor: Colors.white,
+                                        size: 250,
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ).withDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(32.0),
+                          borderWidth: 3.0,
+                          borderColor: AppColors.black,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24.0,
+                            vertical: 32.0,
                           ),
                         ),
-                      ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
 
-        // ConnectionStatusAlert(isConnecting: false), // TODO:
+        // ConnectionStatusAlert при подключении клиента
+        if (_showConnectionAlert)
+          ConnectionStatusAlert(isConnecting: _isConnecting),
       ],
     );
   }
