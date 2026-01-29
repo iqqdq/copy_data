@@ -15,7 +15,7 @@ class ProgressScreen extends StatefulWidget {
 
 class _ProgressScreenState extends State<ProgressScreen> {
   final Map<String, bool> _cancelledTransfers = {};
-  bool _showGoToMainMenuButton = false;
+  bool _isTransferCompleted = false;
 
   bool _checkShowGoToMainMenu(FileTransferService service) {
     final transfers = service.activeTransfers.values.toList();
@@ -71,8 +71,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
           // Обновляем состояние кнопки после отмены
           final showButton = _checkShowGoToMainMenu(service);
 
-          if (showButton != _showGoToMainMenuButton) {
-            setState(() => _showGoToMainMenuButton = showButton);
+          if (showButton != _isTransferCompleted) {
+            setState(() => _isTransferCompleted = showButton);
           }
         }
       },
@@ -88,9 +88,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final showButton = _checkShowGoToMainMenu(service);
-        if (showButton != _showGoToMainMenuButton) {
+        if (showButton != _isTransferCompleted) {
           setState(() {
-            _showGoToMainMenuButton = showButton;
+            _isTransferCompleted = showButton;
           });
         }
       }
@@ -148,7 +148,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   ),
 
                 // Кнопка "В главное меню" показывается только при завершении всех передач
-                if (_showGoToMainMenuButton && transfers.isNotEmpty)
+                if (_isTransferCompleted && transfers.isNotEmpty)
                   CustomButton.primary(
                     title: 'Go to main menu',
                     onPressed: () => Navigator.pop(context),

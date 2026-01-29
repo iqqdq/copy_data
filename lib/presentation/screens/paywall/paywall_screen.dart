@@ -85,14 +85,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
                                       ),
                                     ],
                                   ).withDecoration(
-                                    color: AppColors.white,
-                                    borderRadius: BorderRadius.circular(32.0),
-                                    borderWidth: 3.0,
-                                    borderColor: AppColors.black,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 10.0,
                                       vertical: 12.0,
                                     ),
+                                    color: AppColors.white,
+                                    borderRadius: BorderRadius.circular(32.0),
+                                    borderWidth: 3.0,
+                                    borderColor: AppColors.black,
                                   ),
                             ),
 
@@ -108,6 +108,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             ),
                           ],
                         ).withDecoration(
+                          padding: EdgeInsets.all(24.0),
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(32.0),
                           borderWidth: 3.0,
@@ -115,7 +116,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
                           offset: const Offset(0, 3),
                           blurRadius: 0,
                           spreadRadius: 0,
-                          padding: EdgeInsets.all(24.0),
                         ),
                   ),
 
@@ -124,6 +124,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
             ),
 
+            // TODO: IS_LOADING
             Padding(
               padding: EdgeInsets.only(left: 16.0),
               child: CustomIconButton(

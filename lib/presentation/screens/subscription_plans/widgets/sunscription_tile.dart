@@ -61,6 +61,7 @@ class _SubscriptionTileState extends State<SubscriptionTile> {
         0,
       ),
       child: Row(children: [widget.child]).withDecoration(
+        padding: EdgeInsets.all(24.0),
         color: AppColors.white,
         borderRadius: BorderRadius.circular(32.0),
         borderWidth: hasBorder ? 3.0 : 0,
@@ -69,7 +70,6 @@ class _SubscriptionTileState extends State<SubscriptionTile> {
         shadowColor: hasShadow ? AppColors.black : Colors.transparent,
         blurRadius: 0,
         spreadRadius: 0,
-        padding: EdgeInsets.all(24.0),
       ),
     );
 

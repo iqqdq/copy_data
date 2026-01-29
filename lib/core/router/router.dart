@@ -7,9 +7,10 @@ abstract class AppRoutes {
   static String get onboard => '/onboard';
   static String get paywall => '/paywall';
   static String get main => '/main';
-  static String get progress => '/progress';
   static String get receive => '/receive';
+  static String get scanner => '/scanner';
   static String get send => '/send';
+  static String get progress => '/progress';
   static String get settings => '/settings';
   static String get subscriptionPlans => '/subscription_plans';
   static String get tutorial => '/tutorial';
@@ -22,6 +23,7 @@ abstract class AppNavigation {
     AppRoutes.splash: (_) => const SplashScreen(),
     AppRoutes.main: (_) => const MainScreen(),
     AppRoutes.receive: (_) => const ReceiveScreen(),
+    AppRoutes.scanner: (_) => const ScannerScreen(),
     AppRoutes.send: (_) => const SendScreen(),
     AppRoutes.settings: (_) => const SettingsScreen(),
     AppRoutes.subscriptionPlans: (_) => const SubscriptionPlansScreen(),

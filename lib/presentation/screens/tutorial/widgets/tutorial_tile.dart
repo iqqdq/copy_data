@@ -39,11 +39,11 @@ class TutorialTile extends StatelessWidget {
         hint == null ? const SizedBox.shrink() : hint!,
       ],
     ).withDecoration(
+      padding: const EdgeInsets.all(24.0),
       color: AppColors.white,
       borderRadius: BorderRadius.circular(32.0),
       borderWidth: 3.0,
       borderColor: AppColors.black,
-      padding: const EdgeInsets.all(24.0),
     );
   }
 }

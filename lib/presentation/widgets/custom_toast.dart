@@ -156,14 +156,14 @@ class _ToastContentState extends State<_ToastContent>
                           ],
                         ),
                       ).withDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.circular(32.0),
-                        borderWidth: 3.0,
-                        borderColor: AppColors.black,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 20.0,
                           vertical: 12.0,
                         ),
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(32.0),
+                        borderWidth: 3.0,
+                        borderColor: AppColors.black,
                       ),
                 ),
               ),

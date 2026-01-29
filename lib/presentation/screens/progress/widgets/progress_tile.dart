@@ -137,11 +137,11 @@ class ProgressTile extends StatelessWidget {
         ],
       ),
     ).withDecoration(
+      padding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
       color: AppColors.white,
       borderRadius: BorderRadius.circular(32.0),
       borderWidth: 3.0,
       borderColor: AppColors.black,
-      padding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
     );
   }
 

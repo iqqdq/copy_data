@@ -98,6 +98,7 @@ class _OnboardScreenState extends State<OnboardScreen> {
                         ),
                       ],
                     ).withDecoration(
+                      padding: EdgeInsets.all(24.0),
                       color: AppColors.white,
                       borderRadius: BorderRadius.circular(32.0),
                       borderWidth: 3.0,
@@ -105,7 +106,6 @@ class _OnboardScreenState extends State<OnboardScreen> {
                       offset: const Offset(0, 3),
                       blurRadius: 0,
                       spreadRadius: 0,
-                      padding: EdgeInsets.all(24.0),
                     ),
               ),
 
