@@ -4,11 +4,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
@@ -235,7 +235,6 @@ class FileTransferService extends ChangeNotifier {
         case 'progress_update':
           _handleProgressUpdateFromClient(socket, data);
           break;
-        // ДОБАВЬТЕ ЭТОТ КЕЙС:
         case 'cancel_transfer':
           _handleCancelTransferFromClient(socket, data);
           break;
@@ -245,7 +244,6 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  // ДОБАВЬТЕ ЭТОТ МЕТОД:
   void _handleCancelTransferFromClient(
     WebSocket socket,
     Map<String, dynamic> data,

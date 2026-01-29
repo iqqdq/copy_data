@@ -38,7 +38,9 @@ class _ReceiveScreenState extends State<ReceiveScreen> {
     controller.scannedDataStream.listen((scanData) async {
       if (_isConnecting || _isConnected) return;
 
-      final qrData = scanData.code;
+      final qrData = scanData.code
+          ?.replaceAll('android_', '')
+          .replaceAll('ios_', '');
       if (qrData != null && qrData.isNotEmpty) {
         _qrController?.pauseCamera();
         await _connectFromQR(qrData);

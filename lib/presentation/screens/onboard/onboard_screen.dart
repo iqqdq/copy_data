@@ -45,6 +45,7 @@ class _OnboardScreenState extends State<OnboardScreen> {
                     'assets/images/${_images[_index]}.png',
                     width: 261.0,
                     height: 261.0,
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),

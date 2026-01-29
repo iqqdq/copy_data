@@ -93,12 +93,16 @@ class _StaticRectangle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(width: 32.0, height: 10.0).withDecoration(
-      color: AppColors.accent,
-      borderRadius: BorderRadius.circular(5.0),
-      borderWidth: 2.0,
-      offset: Offset(0, 0),
-      borderColor: AppColors.black,
+    return SizedBox(
+      width: 32.0,
+      height: 10.0,
+      child: const SizedBox.shrink().withDecoration(
+        color: AppColors.accent,
+        borderRadius: BorderRadius.circular(5.0),
+        borderWidth: 2.0,
+        borderColor: AppColors.black,
+        offset: Offset(0, 0),
+      ),
     );
   }
 }

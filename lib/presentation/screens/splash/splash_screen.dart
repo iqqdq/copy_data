@@ -17,7 +17,10 @@ class _SplashScreenState extends State<SplashScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       FlutterNativeSplash.remove();
       await Future.delayed(Duration(milliseconds: 500));
-      if (mounted) Navigator.pushReplacementNamed(context, AppRoutes.onboard);
+
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.onboard);
+      }
     });
   }
 
