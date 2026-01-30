@@ -18,6 +18,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
   bool _showGoToMainMenu = false;
   bool _shouldShowCancellationToast = false;
   String? _cancellationMessage;
+  bool _hasTransferStarted = false;
+
+  // Храним историю передач, чтобы показывать карточки даже после отмены
+  final Map<String, FileTransfer> _transferHistory = {};
+  bool _allTransfersCancelled = false;
 
   @override
   void initState() {
@@ -30,9 +35,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
         _handleRemoteCancellation(message);
       });
     });
-
-    // Показываем кнопку "Go to main menu" если нет активных передач
-    _updateShowMainMenuButton();
   }
 
   @override
@@ -55,16 +57,75 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final service = Provider.of<FileTransferService>(context, listen: false);
     final transfers = service.activeTransfers.values.toList();
 
-    // Проверяем, все ли передачи завершены (прогресс = 100%) или отменены
-    final allCompleted = transfers.every((t) => t.progress >= 100);
-    // Проверяем, отменены ли все передачи
-    final allCancelled = transfers.every(
-      (t) =>
-          _cancelledTransfers[t.transferId] == true ||
-          t.progress < 100 && t.receivedBytes > 0,
-    );
+    // Обновляем историю передач
+    for (final transfer in transfers) {
+      if (!_transferHistory.containsKey(transfer.transferId)) {
+        _transferHistory[transfer.transferId] = transfer;
+      }
+    }
 
-    _showGoToMainMenu = allCompleted || allCancelled;
+    // Проверяем, начались ли передачи (есть хотя бы один байт получено или передача отменена)
+    if (!_hasTransferStarted) {
+      _hasTransferStarted =
+          transfers.any(
+            (t) =>
+                t.receivedBytes > 0 ||
+                _cancelledTransfers[t.transferId] == true,
+          ) ||
+          _transferHistory.values.any(
+            (t) =>
+                t.receivedBytes > 0 ||
+                _cancelledTransfers[t.transferId] == true,
+          );
+    }
+
+    if (transfers.isEmpty && _transferHistory.isEmpty) {
+      // Никогда не было передач
+      _showGoToMainMenu = false;
+      _allTransfersCancelled = false;
+    } else {
+      // Проверяем состояние текущих и исторических передач
+      final allTransfers = [...transfers, ..._transferHistory.values];
+      final uniqueTransfers = <String, FileTransfer>{};
+
+      for (final transfer in allTransfers) {
+        uniqueTransfers[transfer.transferId] = transfer;
+      }
+
+      final allTransfersList = uniqueTransfers.values.toList();
+
+      if (allTransfersList.isEmpty) {
+        _showGoToMainMenu = false;
+        _allTransfersCancelled = false;
+      } else {
+        bool allCompletedOrCancelled = true;
+        bool anyActive = false;
+
+        for (final transfer in allTransfersList) {
+          final isCancelled = _cancelledTransfers[transfer.transferId] == true;
+          final isCompleted = transfer.progress >= 100;
+          final hasStarted = transfer.receivedBytes > 0;
+
+          if (hasStarted && !isCancelled && !isCompleted) {
+            allCompletedOrCancelled = false;
+            anyActive = true;
+          } else if (!hasStarted && !isCancelled) {
+            // Передача еще не началась и не отменена - считаем как активную
+            allCompletedOrCancelled = false;
+          }
+        }
+
+        // Показываем кнопку только если ВСЕ передачи завершены ИЛИ отменены
+        _showGoToMainMenu = allCompletedOrCancelled;
+
+        _allTransfersCancelled =
+            allTransfersList.isNotEmpty &&
+            !anyActive &&
+            allTransfersList.every(
+              (t) => _cancelledTransfers[t.transferId] == true,
+            );
+      }
+    }
 
     if (mounted) {
       setState(() {});
@@ -92,14 +153,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
         _updateShowMainMenuButton();
 
         if (mounted) {
-          // НЕ показываем тост на этой стороне
-          // Вместо этого запоминаем сообщение для отображения на противоположной стороне
-          // Сообщение об отмене будет получено через WebSocket и обработано в FileTransferService
-
-          // Показываем кнопку "Go to main menu" после отмены
-          setState(() {
-            _showGoToMainMenu = true;
-          });
+          // Показываем кнопку "Go to main menu" только если все передачи отменены
+          _updateShowMainMenuButton();
         }
       },
     );
@@ -111,7 +166,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
       setState(() {
         _shouldShowCancellationToast = true;
         _cancellationMessage = message;
-        _showGoToMainMenu = true;
+        // Показываем кнопку только после проверки всех передач
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _updateShowMainMenuButton();
+        });
       });
     }
   }
@@ -121,65 +179,75 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final service = Provider.of<FileTransferService>(context);
     final transfers = service.activeTransfers.values.toList();
 
-    // Слушаем сообщения об отмене из сервиса
-    // В реальном приложении это может быть через Stream или другой механизм
-    // Здесь используем условную логику
+    // Используем историю передач, если текущие передачи пустые
+    final allTransfers = transfers.isNotEmpty
+        ? transfers
+        : _transferHistory.values.toList();
 
-    // Группируем по типу
-    final photoTransfers = transfers
+    // Группируем по типу из всех доступных передач
+    final photoTransfers = allTransfers
         .where(
           (t) => t.fileType.startsWith('image/') || t.fileType == 'image/mixed',
         )
         .toList();
 
-    final videoTransfers = transfers
+    final videoTransfers = allTransfers
         .where(
           (t) => t.fileType.startsWith('video/') || t.fileType == 'video/mixed',
         )
         .toList();
 
+    // Определяем, были ли фото/видео передачи (даже если отменены)
+    final hadPhotoTransfers = photoTransfers.isNotEmpty;
+    final hadVideoTransfers = videoTransfers.isNotEmpty;
+
     return Scaffold(
       appBar: CustomAppBar(
         title: widget.isSending ? 'Sending files' : 'Receiving files',
       ),
-      body: transfers.isEmpty
+      body:
+          (!_hasTransferStarted &&
+              !_showGoToMainMenu &&
+              !_allTransfersCancelled)
           ? const Center(child: CustomLoader())
           : ListView(
               padding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 8.0),
               children: [
-                if (photoTransfers.isNotEmpty)
+                // Показываем карточку фото только если были фото передачи
+                if (hadPhotoTransfers)
                   Padding(
                     padding: EdgeInsets.only(
-                      bottom: videoTransfers.isNotEmpty ? 16.0 : 24.0,
+                      bottom: hadVideoTransfers ? 16.0 : 24.0,
                     ),
                     child: ProgressTile(
                       isPhoto: true,
                       isSending: widget.isSending,
                       service: service,
-                      transfers: photoTransfers,
+                      transfers: allTransfers,
                       cancelledTransfers: _cancelledTransfers,
                       onTransferCancel: (id) =>
                           _cancelTransfer(service: service, transferId: id),
                     ),
                   ),
 
-                // Карточка для видео
-                if (videoTransfers.isNotEmpty)
+                // Показываем карточку видео только если были видео передачи
+                if (hadVideoTransfers)
                   Padding(
                     padding: EdgeInsets.only(bottom: 16.0),
                     child: ProgressTile(
                       isPhoto: false,
                       isSending: widget.isSending,
                       service: service,
-                      transfers: videoTransfers,
+                      transfers: allTransfers,
                       cancelledTransfers: _cancelledTransfers,
                       onTransferCancel: (id) =>
                           _cancelTransfer(service: service, transferId: id),
                     ),
                   ),
 
-                // Кнопка "В главное меню" показывается при завершении всех передач или отмене
-                if (_showGoToMainMenu)
+                // Кнопка "В главное меню" показывается только при завершении ВСЕХ передач
+                // или отмене ВСЕХ передач
+                if (_showGoToMainMenu || _allTransfersCancelled)
                   CustomButton.primary(
                     title: 'Go to main menu',
                     onPressed: () => Navigator.pop(context),

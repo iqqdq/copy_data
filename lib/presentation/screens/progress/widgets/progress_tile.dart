@@ -99,13 +99,10 @@ class ProgressTile extends StatelessWidget {
             padding: EdgeInsets.only(bottom: 8.0),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16.0),
-              child: LinearProgressIndicator(
+              child: RoundedLinearProgressIndicator(
                 value: progress / 100,
-                minHeight: 8.0,
+                height: 8.0,
                 backgroundColor: AppColors.extraLightGray,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  isCancelled ? AppColors.extraLightGray : AppColors.accent,
-                ),
               ),
             ),
           ),
