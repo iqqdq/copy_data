@@ -56,6 +56,13 @@ class FileTransferService extends ChangeNotifier {
   // Список полученных медиафайлов
   final List<ReceivedMedia> _receivedMedia = [];
 
+  // Колбэк для уведомления UI об отмене с другой стороны
+  void Function(String message)? _onRemoteCancellationCallback;
+
+  void setRemoteCancellationCallback(Function(String) callback) {
+    _onRemoteCancellationCallback = callback;
+  }
+
   FileTransferService() {
     _initialize();
   }
@@ -252,6 +259,12 @@ class FileTransferService extends ChangeNotifier {
       final transferId = data['transferId'] as String?;
       if (transferId != null) {
         print('🛑 Получена отмена передачи от клиента: $transferId');
+
+        // Уведомляем UI об отмене
+        if (_onRemoteCancellationCallback != null) {
+          _onRemoteCancellationCallback!('The receiver canceled the transfer');
+        }
+
         _cancelTransferInternal(transferId, notifyRemote: false);
       }
     } catch (e) {
@@ -1109,7 +1122,6 @@ class FileTransferService extends ChangeNotifier {
         case 'progress_update':
           _handleProgressFromServer(data);
           break;
-        // ДОБАВЬТЕ ЭТОТ КЕЙС:
         case 'cancel_transfer':
           _handleCancelTransferFromServer(data);
           break;
@@ -1124,6 +1136,12 @@ class FileTransferService extends ChangeNotifier {
       final transferId = data['transferId'] as String?;
       if (transferId != null) {
         print('🛑 Получена отмена передачи от сервера: $transferId');
+
+        // Уведомляем UI об отмене
+        if (_onRemoteCancellationCallback != null) {
+          _onRemoteCancellationCallback!('The sender canceled the transfer');
+        }
+
         _cancelTransferInternal(transferId, notifyRemote: false);
       }
     } catch (e) {
@@ -1616,7 +1634,6 @@ class FileTransferService extends ChangeNotifier {
       double lastSentProgress = -1.0;
 
       // Храним ссылку на сессию для возможной отмены
-      FFmpegSession? ffmpegSession;
 
       // Включаем слушатель прогресса
       _setupFfmpegProgressListener((progress) {
@@ -1630,8 +1647,6 @@ class FileTransferService extends ChangeNotifier {
 
       // Запускаем FFmpeg асинхронно с возможностью отслеживания
       FFmpegKit.executeAsync(conversionCommand, (session) async {
-        ffmpegSession = session;
-
         // Проверяем отмену сразу после получения сессии
         if (isCancelled) {
           print('🛑 Конвертация отменена перед началом');

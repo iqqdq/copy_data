@@ -15,11 +15,9 @@ class SendScreen extends StatefulWidget {
 
 class _SendScreenState extends State<SendScreen> {
   int _selectedIndex = 0;
-  bool _showConnectionAlert = false;
   bool _autoSendTriggered = false;
-  bool _isQrLoading = true;
-  bool _isClientConnected = false;
   bool _isConnecting = false;
+  bool _isConnected = false;
   final Map<int, bool> _tabInitialized = {0: false, 1: false};
 
   @override
@@ -36,9 +34,9 @@ class _SendScreenState extends State<SendScreen> {
     final service = Provider.of<FileTransferService>(context);
 
     // Проверяем подключение клиента
-    if (service.connectedClients.isNotEmpty && !_isClientConnected) {
+    if (service.connectedClients.isNotEmpty) {
       _handleClientConnected();
-    } else if (service.connectedClients.isEmpty && _isClientConnected) {
+    } else {
       _handleClientDisconnected();
     }
 
@@ -52,36 +50,27 @@ class _SendScreenState extends State<SendScreen> {
 
   Future<void> _startServer() async {
     final service = Provider.of<FileTransferService>(context, listen: false);
-    if (!service.isServerRunning) {
-      await service.startServer();
-    }
-    if (mounted) {
-      Future.delayed(Duration(milliseconds: 300), () {
-        setState(() {
-          _isQrLoading = false;
-        });
-      });
-    }
+    if (!service.isServerRunning) await service.startServer();
   }
 
   Future<void> _handleClientConnected() async {
     if (_isConnecting) return;
 
-    setState(() {
-      _showConnectionAlert = true;
-      _isClientConnected = true;
-    });
-
     if (mounted) {
+      // Задержка 2 сек перед установкой флага подключения
       setState(() => _isConnecting = true);
+      await Future.delayed(const Duration(seconds: 2));
 
-      // Задержка 2 секунды перед установкой флага подключения
-      await Future.delayed(Duration(seconds: 2));
+      // Задержка для показа флага подключения
+      setState(() => _isConnected = true);
 
-      setState(() => _isConnecting = false);
+      // Открытие галереи
+      Future.delayed(const Duration(seconds: 2), () async {
+        setState(() {
+          _isConnecting = false;
+          _isConnected = false;
+        });
 
-      // Переход на ProgressScreen
-      Future.delayed(const Duration(seconds: 1), () async {
         await _pickAndSendMedia();
       });
     }
@@ -89,9 +78,7 @@ class _SendScreenState extends State<SendScreen> {
 
   void _handleClientDisconnected() {
     setState(() {
-      _isClientConnected = false;
       _autoSendTriggered = false;
-      _showConnectionAlert = false;
       _isConnecting = false;
     });
   }
@@ -136,13 +123,6 @@ class _SendScreenState extends State<SendScreen> {
         }
 
         await service.sendFilesToConnectedClient(files);
-
-        // if (mounted) {
-        //   CustomToast.showToast(
-        //     context: context,
-        //     message: '${files.length} файл(ов) отправлено клиенту',
-        //   );
-        // }
       } else {
         setState(() => _autoSendTriggered = false);
       }
@@ -177,21 +157,7 @@ class _SendScreenState extends State<SendScreen> {
                     if (!_tabInitialized[index]!) {
                       setState(() {
                         _selectedIndex = index;
-                      });
-                      Future.delayed(Duration(milliseconds: 300), () {
-                        if (mounted) {
-                          setState(() {
-                            _isQrLoading = true;
-                          });
-                          Future.delayed(Duration(milliseconds: 300), () {
-                            if (mounted) {
-                              setState(() {
-                                _isQrLoading = false;
-                                _tabInitialized[index] = true;
-                              });
-                            }
-                          });
-                        }
+                        _tabInitialized[index] = true;
                       });
                     } else {
                       setState(() {
@@ -243,16 +209,14 @@ class _SendScreenState extends State<SendScreen> {
                                 height: 250,
                                 width: 250,
                                 alignment: Alignment.center,
-                                child: _isQrLoading
-                                    ? CustomSpinnerLoader()
-                                    : QrImageView(
-                                        data: _selectedIndex == 0
-                                            ? 'ios_${service.localIp}:${FileTransferService.PORT}'
-                                            : 'android_${service.localIp}:${FileTransferService.PORT}',
-                                        version: QrVersions.auto,
-                                        backgroundColor: Colors.white,
-                                        size: 250,
-                                      ),
+                                child: QrImageView(
+                                  data: _selectedIndex == 0
+                                      ? 'ios_${service.localIp}:${FileTransferService.PORT}'
+                                      : 'android_${service.localIp}:${FileTransferService.PORT}',
+                                  version: QrVersions.auto,
+                                  backgroundColor: Colors.white,
+                                  size: 250,
+                                ),
                               ),
                             ),
                           ],
@@ -276,8 +240,7 @@ class _SendScreenState extends State<SendScreen> {
         ),
 
         // ConnectionStatusAlert при подключении клиента
-        if (_showConnectionAlert)
-          ConnectionStatusAlert(isConnecting: _isConnecting),
+        if (_isConnecting) ConnectionStatusAlert(isConnecting: !_isConnected),
       ],
     );
   }

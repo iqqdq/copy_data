@@ -27,8 +27,6 @@ class CustomTabBar extends StatefulWidget {
 class _CustomTabBarState extends State<CustomTabBar>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-
-  late double _indicatorWidth;
   late int _previousIndex;
 
   @override
@@ -39,13 +37,6 @@ class _CustomTabBarState extends State<CustomTabBar>
       vsync: this,
     );
     _previousIndex = widget.selectedIndex;
-    _indicatorWidth = 0;
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _updateIndicatorWidth();
   }
 
   @override
@@ -53,15 +44,15 @@ class _CustomTabBarState extends State<CustomTabBar>
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.selectedIndex != widget.selectedIndex) {
-      _updateIndicatorWidth();
       _previousIndex = oldWidget.selectedIndex;
-      _controller.forward(from: 0);
-    }
-  }
 
-  void _updateIndicatorWidth() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    _indicatorWidth = screenWidth / widget.tabs.length;
+      if (_controller.status == AnimationStatus.forward) {
+        _controller.stop();
+      }
+
+      _controller.value = 0;
+      _controller.forward();
+    }
   }
 
   @override
@@ -72,19 +63,11 @@ class _CustomTabBarState extends State<CustomTabBar>
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final newWidth = MediaQuery.of(context).size.width / widget.tabs.length;
-      if (newWidth != _indicatorWidth) {
-        setState(() {
-          _indicatorWidth = newWidth;
-        });
-      }
-    });
-
     return SizedBox(
       height: widget.tabHeight,
       child: LayoutBuilder(
         builder: (context, constraints) {
+          // Расчет ширины индикатора на основе фактических размеров
           final tabWidth = constraints.maxWidth / widget.tabs.length;
 
           return Stack(

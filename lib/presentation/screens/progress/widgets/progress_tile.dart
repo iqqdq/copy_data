@@ -126,13 +126,14 @@ class ProgressTile extends StatelessWidget {
             ],
           ),
 
-          SizedBox(height: 16),
-
           // Кнопка отмены (показываем только если передача не завершена и не отменена)
           if (progress < 100 && !isCancelled)
-            CustomButton.primary(
-              title: isSending ? 'Cancel sending' : 'Cancel receiving',
-              onPressed: () => onTransferCancel(transferId),
+            Padding(
+              padding: EdgeInsets.only(top: 16.0),
+              child: CustomButton.primary(
+                title: isSending ? 'Cancel sending' : 'Cancel receiving',
+                onPressed: () => onTransferCancel(transferId),
+              ),
             ),
         ],
       ),

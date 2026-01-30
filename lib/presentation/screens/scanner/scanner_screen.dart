@@ -18,6 +18,7 @@ class ScannerScreen extends StatefulWidget {
 
 class _ScannerScreenState extends State<ScannerScreen> {
   bool _isConnecting = false;
+  bool _isConnected = false;
   QRViewController? _qrController;
   final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
 
@@ -67,24 +68,29 @@ class _ScannerScreenState extends State<ScannerScreen> {
       // Подключение к серверу
       await service.connectToServer(serverIp, port: port);
 
-      // Задержка 2 секунды перед установкой флага подключения
+      // Задержка 2 сек перед установкой флага подключения
+      setState(() => _isConnecting = true);
       await Future.delayed(const Duration(seconds: 2));
 
-      // Переход на ProgressScreen
-      if (mounted) {
-        setState(() => _isConnecting = true);
+      // Задержка для показа флага подключения
+      setState(() => _isConnected = true);
 
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) {
-            final bool isSending = false;
-            Navigator.pushReplacementNamed(
-              context,
-              AppRoutes.progress,
-              arguments: isSending,
-            );
-          }
+      // Переход на ProgressScreen
+      Future.delayed(const Duration(seconds: 2), () {
+        setState(() {
+          _isConnecting = false;
+          _isConnected = false;
         });
-      }
+
+        if (mounted) {
+          final bool isSending = false;
+          Navigator.pushReplacementNamed(
+            context,
+            AppRoutes.progress,
+            arguments: isSending,
+          );
+        }
+      });
     } catch (e) {
       // Возобновляем сканирование при ошибке
       Future.delayed(const Duration(seconds: 2), () {
@@ -114,7 +120,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
           ),
 
           // ConnectionStatusAlert при подключении к серверу
-          if (_isConnecting) ConnectionStatusAlert(isConnecting: _isConnecting),
+          if (_isConnecting) ConnectionStatusAlert(isConnecting: !_isConnected),
 
           // Верхняя панель
           SafeArea(
