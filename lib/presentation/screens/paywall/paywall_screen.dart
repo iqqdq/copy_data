@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../../app.dart';
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -99,12 +100,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
                             CustomButton.primary(
                               title: 'Continue',
                               isLoading: false, // TODO:
-                              onPressed: () => Navigator.canPop(context)
-                                  ? Navigator.pop(context)
-                                  : Navigator.pushReplacementNamed(
-                                      context,
-                                      AppRoutes.main,
-                                    ),
+                              onPressed: () {
+                                isSubscribed.value = true;
+                                Navigator.canPop(context)
+                                    ? Navigator.pop(context)
+                                    : Navigator.pushReplacementNamed(
+                                        context,
+                                        AppRoutes.main,
+                                      );
+                              },
                             ),
                           ],
                         ).withDecoration(

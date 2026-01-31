@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../../../app.dart';
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -31,7 +32,7 @@ class _SendScreenState extends State<SendScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final service = Provider.of<FileTransferService>(context);
+    final service = Provider.of<FileTransferService>(context, listen: false);
 
     // Проверяем подключение клиента
     if (service.connectedClients.isNotEmpty) {
@@ -94,19 +95,35 @@ class _SendScreenState extends State<SendScreen> {
   Future<void> _pickAndSendMedia() async {
     final service = Provider.of<FileTransferService>(context, listen: false);
     if (service.connectedClients.isEmpty) {
-      if (mounted) {
-        CustomToast.showToast(
-          context: context,
-          message: 'The recipient was disconnected',
-        );
-      }
       return;
     }
 
     try {
-      final pickedFiles = await ImagePicker().pickMultipleMedia();
-      final files = <File>[];
+      // Проверяем подписку для отправки на Android
+      if (_selectedIndex == 1 && !isSubscribed.value) {
+        // Возвращаемся на предыдущую вкладку
+        if (mounted) {
+          setState(() => _selectedIndex = 0);
+        }
+        return;
+      }
 
+      // TODO:
+      final pickedFiles = await ImagePicker().pickMultipleMedia(
+        limit: isSubscribed.value ? null : 10,
+      );
+
+      // TODO:
+      if (mounted && !isSubscribed.value) {
+        await OkDialog.show(
+          context,
+          title: 'Subscription Required',
+          message:
+              'To pick more than 10 files, you must have an active Premium subscription',
+        );
+      }
+
+      final files = <File>[];
       for (final image in pickedFiles) {
         files.add(File(image.path));
       }
@@ -138,6 +155,39 @@ class _SendScreenState extends State<SendScreen> {
     }
   }
 
+  void _onTabSelected(int index) {
+    // Сначала переключаем таб
+    if (!_tabInitialized[index]!) {
+      setState(() {
+        _selectedIndex = index;
+        _tabInitialized[index] = true;
+      });
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
+
+    // Затем проверяем подписку для Android таба
+    if (index == 1 && !isSubscribed.value) {
+      // Небольшая задержка для плавного перехода таба перед показом алерта
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        PremiumRequiredDialog.show(
+          context,
+          onGetPermiumPressed: () {
+            Navigator.pushNamed(context, AppRoutes.paywall);
+          },
+          onCancelPressed: () {
+            // Возвращаем на первый таб при отмене
+            if (mounted) {
+              setState(() => _selectedIndex = 0);
+            }
+          },
+        );
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<FileTransferService>(context);
@@ -153,18 +203,7 @@ class _SendScreenState extends State<SendScreen> {
                 CustomTabBar(
                   tabs: ['Transfer to IOS', 'Transfer to Android'],
                   selectedIndex: _selectedIndex,
-                  onTabSelected: (index) {
-                    if (!_tabInitialized[index]!) {
-                      setState(() {
-                        _selectedIndex = index;
-                        _tabInitialized[index] = true;
-                      });
-                    } else {
-                      setState(() {
-                        _selectedIndex = index;
-                      });
-                    }
-                  },
+                  onTabSelected: _onTabSelected,
                 ),
 
                 Expanded(
@@ -243,7 +282,7 @@ class _SendScreenState extends State<SendScreen> {
           ),
         ),
 
-        // ConnectionStatusAlert при подключении клиента
+        // При подключении клиента
         if (_isConnecting) ConnectionStatusAlert(isConnecting: !_isConnected),
       ],
     );

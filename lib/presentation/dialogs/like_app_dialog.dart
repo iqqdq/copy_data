@@ -6,14 +6,14 @@ import 'package:adaptive_dialog/adaptive_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import '../../app.dart';
+
 class LikeAppDialog {
   static Future<void> show(BuildContext context) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final isAppLiked = prefs.getBool('is_app_liked') ?? false;
 
-    if (context.mounted &&
-        // isSubscribed.value && // TODO:
-        !isAppLiked) {
+    if (context.mounted && isSubscribed.value && !isAppLiked) {
       final result = await showOkCancelAlertDialog(
         context: context,
         title: 'Do you like the app?',

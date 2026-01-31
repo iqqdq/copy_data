@@ -23,6 +23,51 @@ class _ScannerScreenState extends State<ScannerScreen> {
   bool _isDialogShowing = false;
 
   @override
+  void initState() {
+    super.initState();
+    _setupSubscriptionCallback();
+  }
+
+  void _setupSubscriptionCallback() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final service = Provider.of<FileTransferService>(context, listen: false);
+
+      // Устанавливаем callback
+      service.setOnSubscriptionRequiredCallback(() {
+        _handleSubscriptionRequired(service);
+      });
+    });
+  }
+
+  void _handleSubscriptionRequired(FileTransferService service) {
+    if (_isDialogShowing || !mounted) return;
+
+    // Сбрасываем флаги подключения
+    if (_isConnecting || _isConnected) {
+      setState(() {
+        _isConnecting = false;
+        _isConnected = false;
+      });
+    }
+
+    // Показываем диалог
+    Future.delayed(Duration.zero, () {
+      if (mounted) {
+        _showSubscriptionRequiredDialog(service);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Удаляем callback при dispose
+    final service = Provider.of<FileTransferService>(context, listen: false);
+    service.removeOnSubscriptionRequiredCallback();
+
+    super.dispose();
+  }
+
+  @override
   void reassemble() {
     super.reassemble();
     if (Platform.isAndroid) {
@@ -33,8 +78,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
   }
 
   Future<void> _onQRViewCreated(QRViewController controller) async {
+    _qrController = controller;
     controller.scannedDataStream.listen((scanData) async {
-      // Игнорируем новые сканы если идет подключение или показывается диалог
       if (_isConnecting || _isDialogShowing) return;
 
       final qrData = scanData.code;
@@ -46,28 +91,42 @@ class _ScannerScreenState extends State<ScannerScreen> {
   }
 
   Future<void> _validateAndConnect(String qrData) async {
-    // Проверяем префикс платформы
     final isIosQr = qrData.startsWith('ios_');
     final isAndroidQr = qrData.startsWith('android_');
-
-    // Получаем текущую платформу
     final isCurrentIos = Platform.isIOS;
     final isCurrentAndroid = Platform.isAndroid;
 
     if ((isCurrentIos && !isIosQr) || (isCurrentAndroid && !isAndroidQr)) {
-      // Сканируется QR-код для той же платформы - показываем ошибку
       await _showPlatformErrorDialog(isCurrentIos ? 'iOS' : 'Android');
       return;
     }
 
-    // Если QR-код без префикса (старый формат) - обрабатываем
     final cleanData = qrData.replaceAll('android_', '').replaceAll('ios_', '');
-
     if (cleanData.isNotEmpty) {
       await _connectFromQR(cleanData);
     } else {
       await _showInvalidQrDialog();
     }
+  }
+
+  Future<void> _showSubscriptionRequiredDialog(
+    FileTransferService service,
+  ) async {
+    _isDialogShowing = true;
+    _qrController?.pauseCamera();
+
+    await OkDialog.show(
+      context,
+      title: 'Subscription Required',
+      message:
+          'To receive files, the connected iOS device must have an active Premium subscription. Please purchase it on the iOS device',
+    );
+
+    service.resetSubscriptionDialogFlag();
+    _isDialogShowing = false;
+
+    // Возобновляем сканирование
+    _qrController?.resumeCamera();
   }
 
   Future<void> _showPlatformErrorDialog(String currentPlatform) async {
@@ -77,13 +136,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
       context,
       title: 'Wrong QR Code',
       message:
-          'You are using $currentPlatform device.\n'
-          'Please, scan QR-code for $currentPlatform',
+          'You are using $currentPlatform device. Please, scan QR-code for $currentPlatform',
     );
 
     _isDialogShowing = false;
-
-    // Возобновляем камеру после закрытия диалога
     _qrController?.resumeCamera();
   }
 
@@ -97,8 +153,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
     );
 
     _isDialogShowing = false;
-
-    // Возобновляем камеру после закрытия диалога
     _qrController?.resumeCamera();
   }
 
@@ -124,21 +178,31 @@ class _ScannerScreenState extends State<ScannerScreen> {
       // Подключение к серверу
       await service.connectToServer(serverIp, port: port);
 
-      // Задержка 2 сек перед установкой флага подключения
+      // КОРОТКАЯ задержка
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Проверяем, не установился ли флаг shouldShowSubscriptionDialog
+      if (service.shouldShowSubscriptionDialog) {
+        // Если флаг установлен - callback уже сработал или сработает
+        // Просто выходим, не показывая ConnectionStatusAlert
+        setState(() => _isConnecting = false);
+        _qrController?.resumeCamera();
+        return;
+      }
+
+      // ДАЛЬНЕЙШАЯ ЛОГИКА ПОДКЛЮЧЕНИЯ ТОЛЬКО ЕСЛИ НЕ БЫЛО ОШИБКИ ПОДПИСКИ
       setState(() => _isConnecting = true);
       await Future.delayed(const Duration(seconds: 2));
 
-      // Задержка для показа флага подключения
       setState(() => _isConnected = true);
 
-      // Переход на ProgressScreen
       Future.delayed(const Duration(seconds: 2), () {
-        setState(() {
-          _isConnecting = false;
-          _isConnected = false;
-        });
-
         if (mounted) {
+          setState(() {
+            _isConnecting = false;
+            _isConnected = false;
+          });
+
           final bool isSending = false;
           Navigator.pushReplacementNamed(
             context,
@@ -148,8 +212,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
         }
       });
     } catch (e) {
-      // Возобновляем сканирование при ошибке
-      Future.delayed(const Duration(seconds: 2), () {
+      print('❌ Ошибка подключения: $e');
+
+      Future.delayed(const Duration(seconds: 1), () {
         if (mounted) {
           setState(() => _isConnecting = false);
           _qrController?.resumeCamera();
@@ -175,10 +240,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
             ),
           ),
 
-          // ConnectionStatusAlert при подключении к серверу
           if (_isConnecting) ConnectionStatusAlert(isConnecting: !_isConnected),
 
-          // Верхняя панель
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),

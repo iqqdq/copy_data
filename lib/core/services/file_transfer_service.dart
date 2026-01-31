@@ -18,6 +18,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../../app.dart';
+
 class FileTransferService extends ChangeNotifier {
   static const int CHUNK_SIZE = 32 * 1024; // 32KB
   static const int PORT = 8080;
@@ -42,19 +44,35 @@ class FileTransferService extends ChangeNotifier {
   Directory? _appDocumentsDirectory;
 
   bool _isProgressListenerActive = false;
+  bool _shouldShowSubscriptionDialog = false;
 
   // Getters
   bool get isServerRunning => _isServerRunning;
+
   String get localIp => _localIp;
   String get status => _status;
   String? get connectedServerIp => _connectedServerIp;
   String? get connectedServerName => _connectedServerName;
   bool get isConnected => _clientChannel != null;
+
   Map<String, FileTransfer> get activeTransfers => Map.from(_activeTransfers);
+
   List<ReceivedMedia> get receivedMedia => _receivedMedia;
+  bool get shouldShowSubscriptionDialog => _shouldShowSubscriptionDialog;
 
   // Список полученных медиафайлов
   final List<ReceivedMedia> _receivedMedia = [];
+
+  // Колбэк для уведомления UI об отсутствии подписки
+  VoidCallback? _onSubscriptionRequired;
+
+  void setOnSubscriptionRequiredCallback(VoidCallback callback) {
+    _onSubscriptionRequired = callback;
+  }
+
+  void removeOnSubscriptionRequiredCallback() {
+    _onSubscriptionRequired = null;
+  }
 
   // Колбэк для уведомления UI об отмене с другой стороны
   void Function(String message)? _onRemoteCancellationCallback;
@@ -125,8 +143,6 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> startServer() async {
     try {
-      print('🚀 ЗАПУСК НАТИВНОГО WEB SOCKET СЕРВЕРА');
-
       _status = 'Запуск сервера...';
       notifyListeners();
 
@@ -154,8 +170,8 @@ class FileTransferService extends ChangeNotifier {
           _isServerRunning = true;
           _status = 'Сервер запущен ✅\nIP: $_localIp\nПорт: $port';
 
-          print('🎉 WEB SOCKET СЕРВЕР ЗАПУЩЕН!');
-          print('   Подключитесь: ws://$_localIp:$port');
+          print('🎉 WEB SOCKET сервер запущен!');
+          print('Подключитесь: ws://$_localIp:$port');
 
           notifyListeners();
           break;
@@ -193,6 +209,7 @@ class FileTransferService extends ChangeNotifier {
         print('✅ WebSocket клиент подключен');
 
         _connectedClients.add(webSocket);
+        notifyListeners();
 
         final clientName =
             request.headers.value('client-name') ?? 'Неизвестный';
@@ -203,10 +220,12 @@ class FileTransferService extends ChangeNotifier {
           onDone: () {
             print('❌ Клиент отключился');
             _connectedClients.remove(webSocket);
+            notifyListeners();
           },
           onError: (error) {
             print('⚠️ Ошибка от клиента: $error');
             _connectedClients.remove(webSocket);
+            notifyListeners();
           },
         );
       } else {
@@ -311,6 +330,34 @@ class FileTransferService extends ChangeNotifier {
   ) async {
     print('🤝 Handshake от клиента: ${data['clientInfo']}');
 
+    // Проверяем наличие подписки
+    if (!isSubscribed.value) {
+      print('⚠️ У сервера нет подписки, отправляю уведомление клиенту');
+
+      socket.add(
+        jsonEncode({
+          'type': 'subscription_required',
+          'timestamp': DateTime.now().toIso8601String(),
+        }),
+      );
+
+      // Закрываем соединение после отправки сообщения
+      await Future.delayed(Duration(milliseconds: 500));
+
+      try {
+        await socket.close();
+      } catch (e) {
+        print('⚠️ Ошибка закрытия сокета: $e');
+      }
+
+      // Удаляем клиента из списка
+      _connectedClients.remove(socket);
+      notifyListeners();
+
+      return;
+    }
+
+    // Если подписка есть - продолжаем обычный handshake
     socket.add(
       jsonEncode({
         'type': 'handshake_ack',
@@ -1035,6 +1082,11 @@ class FileTransferService extends ChangeNotifier {
 
   // =========== КЛИЕНТСКИЕ МЕТОДЫ (ПРИЕМ ФАЙЛОВ) ===========
 
+  void resetSubscriptionDialogFlag() {
+    _shouldShowSubscriptionDialog = false;
+    notifyListeners();
+  }
+
   Future<void> connectToServer(String serverIp, {int port = PORT}) async {
     try {
       print('📱 ПОДКЛЮЧЕНИЕ К СЕРВЕРУ: $serverIp:$port');
@@ -1119,6 +1171,9 @@ class FileTransferService extends ChangeNotifier {
             notifyListeners();
           }
           break;
+        case 'subscription_required':
+          _handleSubscriptionRequired(data);
+          break;
         case 'group_metadata':
           _handleGroupMetadataFromServer(data);
           break;
@@ -1137,6 +1192,20 @@ class FileTransferService extends ChangeNotifier {
       }
     } catch (e) {
       print('❌ Ошибка обработки сообщения клиентом: $e');
+    }
+  }
+
+  void _handleSubscriptionRequired(Map<String, dynamic> data) {
+    print('⚠️ Получено сообщение: требуется подписка на сервере');
+
+    disconnect();
+
+    _shouldShowSubscriptionDialog = true;
+    notifyListeners();
+
+    // Вызываем callback если он установлен
+    if (_onSubscriptionRequired != null) {
+      _onSubscriptionRequired!();
     }
   }
 

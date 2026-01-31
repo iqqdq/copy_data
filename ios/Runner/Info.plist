@@ -46,11 +46,14 @@
 		<key>NSBonjourServices</key>
 		<array>
 			<string>_filetransfer._tcp</string>
+			<string>_http._tcp</string>
+    		<string>_ws._tcp</string>
 		</array>
-		<key>NSBonjourServices</key>
-		<array>
-			<string>_filetransfer._tcp</string>
-		</array>
+		<key>NSAppTransportSecurity</key>
+		<dict>
+    	<key>NSAllowsArbitraryLoads</key>
+    		<true/>
+		</dict>
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
