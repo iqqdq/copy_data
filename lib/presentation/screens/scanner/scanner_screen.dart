@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
-
 import 'package:provider/provider.dart';
 import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
 
@@ -17,10 +16,11 @@ class ScannerScreen extends StatefulWidget {
 }
 
 class _ScannerScreenState extends State<ScannerScreen> {
+  final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
+  QRViewController? _qrController;
   bool _isConnecting = false;
   bool _isConnected = false;
-  QRViewController? _qrController;
-  final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
+  bool _isDialogShowing = false;
 
   @override
   void reassemble() {
@@ -34,16 +34,72 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   Future<void> _onQRViewCreated(QRViewController controller) async {
     controller.scannedDataStream.listen((scanData) async {
-      if (_isConnecting) return;
+      // Игнорируем новые сканы если идет подключение или показывается диалог
+      if (_isConnecting || _isDialogShowing) return;
 
-      final qrData = scanData.code
-          ?.replaceAll('android_', '')
-          .replaceAll('ios_', '');
+      final qrData = scanData.code;
       if (qrData != null && qrData.isNotEmpty) {
         _qrController?.pauseCamera();
-        await _connectFromQR(qrData);
+        await _validateAndConnect(qrData);
       }
     });
+  }
+
+  Future<void> _validateAndConnect(String qrData) async {
+    // Проверяем префикс платформы
+    final isIosQr = qrData.startsWith('ios_');
+    final isAndroidQr = qrData.startsWith('android_');
+
+    // Получаем текущую платформу
+    final isCurrentIos = Platform.isIOS;
+    final isCurrentAndroid = Platform.isAndroid;
+
+    if ((isCurrentIos && !isIosQr) || (isCurrentAndroid && !isAndroidQr)) {
+      // Сканируется QR-код для той же платформы - показываем ошибку
+      await _showPlatformErrorDialog(isCurrentIos ? 'iOS' : 'Android');
+      return;
+    }
+
+    // Если QR-код без префикса (старый формат) - обрабатываем
+    final cleanData = qrData.replaceAll('android_', '').replaceAll('ios_', '');
+
+    if (cleanData.isNotEmpty) {
+      await _connectFromQR(cleanData);
+    } else {
+      await _showInvalidQrDialog();
+    }
+  }
+
+  Future<void> _showPlatformErrorDialog(String currentPlatform) async {
+    _isDialogShowing = true;
+
+    await OkDialog.show(
+      context,
+      title: 'Wrong QR Code',
+      message:
+          'You are using $currentPlatform device.\n'
+          'Please, scan QR-code for $currentPlatform',
+    );
+
+    _isDialogShowing = false;
+
+    // Возобновляем камеру после закрытия диалога
+    _qrController?.resumeCamera();
+  }
+
+  Future<void> _showInvalidQrDialog() async {
+    _isDialogShowing = true;
+
+    await OkDialog.show(
+      context,
+      title: 'Invalid QR Code',
+      message: 'QR code does not contain valid connection data.',
+    );
+
+    _isDialogShowing = false;
+
+    // Возобновляем камеру после закрытия диалога
+    _qrController?.resumeCamera();
   }
 
   Future<void> _connectFromQR(String qrData) async {

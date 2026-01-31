@@ -166,6 +166,7 @@ class _SendScreenState extends State<SendScreen> {
                     }
                   },
                 ),
+
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: Duration(milliseconds: 300),
@@ -186,6 +187,7 @@ class _SendScreenState extends State<SendScreen> {
                                 height: 74.0,
                               ),
                             ),
+
                             Padding(
                               padding: EdgeInsets.only(bottom: 8.0),
                               child: Text(
@@ -195,6 +197,7 @@ class _SendScreenState extends State<SendScreen> {
                                 style: AppTypography.title20Medium,
                               ),
                             ),
+
                             Padding(
                               padding: EdgeInsets.only(bottom: 8.0),
                               child:
@@ -204,6 +207,7 @@ class _SendScreenState extends State<SendScreen> {
                                         style: AppTypography.body16Regular,
                                       ),
                             ),
+
                             Center(
                               child: Container(
                                 height: 250,

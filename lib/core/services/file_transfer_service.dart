@@ -352,7 +352,10 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> stopServer() async {
     try {
-      print('🛑 Останавливаю сервер...');
+      print('🛑 Остановка сервера...');
+
+      // Очищаем все активные передачи
+      _activeTransfers.clear();
 
       // Закрываем все активные файловые потоки
       for (final receiver in _fileReceivers.values) {
@@ -360,6 +363,7 @@ class FileTransferService extends ChangeNotifier {
       }
       _fileReceivers.clear();
 
+      // Закрываем все подключения клиентов
       for (final client in _connectedClients) {
         try {
           await client.close();
@@ -369,16 +373,21 @@ class FileTransferService extends ChangeNotifier {
       }
       _connectedClients.clear();
 
+      // Закрываем HTTP сервер
       if (_httpServer != null) {
         await _httpServer!.close();
         _httpServer = null;
       }
 
+      // Сбрасываем все состояния
       _isServerRunning = false;
       _status = 'Сервер остановлен';
+      _connectedServerIp = null;
+      _connectedServerName = null;
 
-      print('✅ Сервер остановлен');
       notifyListeners();
+
+      print('✅ Сервер остановлен, все передачи очищены');
     } catch (e) {
       print('❌ Ошибка остановки сервера: $e');
     }
@@ -1864,8 +1873,6 @@ class FileTransferService extends ChangeNotifier {
   ) async {
     try {
       print('💾 Сохранение в галерею: ${file.path}');
-      print('📱 Платформа: ${Platform.operatingSystem}');
-      print('📄 MIME тип: $mimeType');
       print('📝 Имя файла: $originalName');
 
       bool isSaved = false;

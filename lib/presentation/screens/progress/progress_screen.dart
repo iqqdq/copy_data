@@ -41,7 +41,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    _updateShowMainMenuButton();
+    _checkTransferCompletion();
 
     // Проверяем, нужно ли показать уведомление об отмене
     if (_shouldShowCancellationToast && _cancellationMessage != null) {
@@ -53,7 +53,51 @@ class _ProgressScreenState extends State<ProgressScreen> {
     }
   }
 
-  void _updateShowMainMenuButton() {
+  void _cancelTransfer({
+    required FileTransferService service,
+    required String transferId,
+  }) async {
+    await DestructiveDialog.show(
+      context,
+      message: widget.isSending
+          ? 'Are you sure you want to stop sending files? Your transfer will be interrupted'
+          : 'Are you sure you want to stop receiving files? Your transfer will be interrupted',
+      cancelTitle: widget.isSending ? 'Keep sending' : 'Keep receiving',
+      onDestructivePressed: () async {
+        // Помечаем передачу как отмененную
+        if (mounted) {
+          setState(() => _cancelledTransfers[transferId] = true);
+        }
+
+        // Отменяем передачу в сервисе
+        await service.cancelTransfer(transferId);
+
+        // Обновляем состояние кнопки после отмены
+        _checkTransferCompletion();
+
+        if (mounted) {
+          // Показываем кнопку "Go to main menu" только если все передачи отменены
+          _checkTransferCompletion();
+        }
+      },
+    );
+  }
+
+  // Метод для обработки уведомления об отмене с другой стороны
+  void _handleRemoteCancellation(String message) {
+    if (mounted) {
+      setState(() {
+        _shouldShowCancellationToast = true;
+        _cancellationMessage = message;
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _checkTransferCompletion();
+        });
+      });
+    }
+  }
+
+  void _checkTransferCompletion() {
     final service = Provider.of<FileTransferService>(context, listen: false);
     final transfers = service.activeTransfers.values.toList();
 
@@ -127,50 +171,42 @@ class _ProgressScreenState extends State<ProgressScreen> {
       }
     }
 
+    _stopServerIfAllTransfersComplete(service, transfers);
+
     if (mounted) {
       setState(() {});
     }
   }
 
-  void _cancelTransfer({
-    required FileTransferService service,
-    required String transferId,
-  }) async {
-    await DestructiveDialog.show(
-      context,
-      message: widget.isSending
-          ? 'Are you sure you want to stop sending files? Your transfer will be interrupted'
-          : 'Are you sure you want to stop receiving files? Your transfer will be interrupted',
-      cancelTitle: widget.isSending ? 'Keep sending' : 'Keep receiving',
-      onDestructivePressed: () async {
-        // Помечаем передачу как отмененную
-        setState(() => _cancelledTransfers[transferId] = true);
+  void _stopServerIfAllTransfersComplete(
+    FileTransferService service,
+    List<FileTransfer> transfers,
+  ) {
+    // Проверяем условия для остановки сервера
+    final shouldStopServer =
+        (_showGoToMainMenu || _allTransfersCancelled) &&
+        service.isServerRunning &&
+        mounted;
 
-        // Отменяем передачу в сервисе
-        await service.cancelTransfer(transferId);
+    if (shouldStopServer) {
+      // Дополнительная проверка: все ли передачи действительно завершены
+      final allTransfersFinished =
+          transfers.isEmpty ||
+          transfers.every(
+            (t) =>
+                t.progress >= 100 || _cancelledTransfers[t.transferId] == true,
+          );
 
-        // Обновляем состояние кнопки после отмены
-        _updateShowMainMenuButton();
-
-        if (mounted) {
-          // Показываем кнопку "Go to main menu" только если все передачи отменены
-          _updateShowMainMenuButton();
-        }
-      },
-    );
-  }
-
-  // Метод для обработки уведомления об отмене с другой стороны
-  void _handleRemoteCancellation(String message) {
-    if (mounted) {
-      setState(() {
-        _shouldShowCancellationToast = true;
-        _cancellationMessage = message;
-        // Показываем кнопку только после проверки всех передач
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _updateShowMainMenuButton();
+      if (allTransfersFinished) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          try {
+            print('🔄 Все передачи завершены, останавливаю сервер...');
+            await service.stopServer();
+          } catch (e) {
+            print('⚠️ Ошибка при остановке сервера: $e');
+          }
         });
-      });
+      }
     }
   }
 
@@ -204,6 +240,19 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return Scaffold(
       appBar: CustomAppBar(
         title: widget.isSending ? 'Sending files' : 'Receiving files',
+        onBackPressed: () async => {
+          if (transfers.isEmpty)
+            Navigator.pop(context)
+          else
+            await DestructiveDialog.show(
+              context,
+              message: widget.isSending
+                  ? 'Are you sure you want to stop sending files? Your transfer will be interrupted'
+                  : 'Are you sure you want to stop receiving files? Your transfer will be interrupted',
+              cancelTitle: widget.isSending ? 'Keep sending' : 'Keep receiving',
+              onDestructivePressed: () => service.stopServer(),
+            ),
+        },
       ),
       body:
           (!_hasTransferStarted &&
