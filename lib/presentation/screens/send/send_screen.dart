@@ -108,12 +108,6 @@ class _SendScreenState extends State<SendScreen> {
         return;
       }
 
-      // TODO:
-      final pickedFiles = await ImagePicker().pickMultipleMedia(
-        limit: isSubscribed.value ? null : 10,
-      );
-
-      // TODO:
       if (mounted && !isSubscribed.value) {
         await OkDialog.show(
           context,
@@ -123,12 +117,15 @@ class _SendScreenState extends State<SendScreen> {
         );
       }
 
+      final pickedFiles = await ImagePicker().pickMultipleMedia(
+        limit: isSubscribed.value ? null : 10,
+      );
+
       final files = <File>[];
       for (final image in pickedFiles) {
         files.add(File(image.path));
       }
 
-      // TODO: SEND FILES TO PROGRESS ?
       if (files.isNotEmpty) {
         if (mounted) {
           final bool isSending = true;
