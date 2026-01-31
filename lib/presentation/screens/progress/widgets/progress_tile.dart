@@ -23,20 +23,45 @@ class ProgressTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = _calculateAverageProgress(transfers);
-    final completedFiles = transfers.first.completedFiles;
-    final totalFiles = transfers.first.totalFiles;
-    final transferId = transfers.first.transferId;
-    final isCancelled = cancelledTransfers[transferId] ?? false;
-    final isCompleted = progress >= 100;
+    if (transfers.isEmpty) return SizedBox.shrink();
 
+    // Проверяем, есть ли отмененные передачи в этой группе
+    bool hasCancelledTransfer = transfers.any(
+      (t) => cancelledTransfers[t.transferId] == true,
+    );
+
+    // Считаем общую статистику по всем передачам в группе
+    final progress = _calculateAverageProgress(transfers);
+    int totalFiles = 0;
+    int completedFiles = 0;
     int totalReceived = 0;
     int totalSize = 0;
 
     for (final transfer in transfers) {
+      totalFiles += transfer.totalFiles;
+      completedFiles += transfer.completedFiles;
       totalReceived += transfer.receivedBytes;
       totalSize += transfer.fileSize;
     }
+
+    // Если передача отменена, но прогресс 100%, считаем ее завершенной
+    // (возможно отмена произошла уже после фактического завершения)
+    final isCancelled = hasCancelledTransfer;
+
+    // Передача считается завершенной если:
+    // 1. Прогресс 100% ИЛИ
+    // 2. Все файлы получены (для клиента) И при этом не отменена
+    final isCompleted = _isTransferCompleted(
+      progress: progress,
+      hasCancelledTransfer: hasCancelledTransfer,
+      totalFiles: totalFiles,
+      completedFiles: completedFiles,
+      isSending: isSending,
+    );
+
+    // Определяем финальное состояние для отображения
+    final isFinalState = isCompleted || isCancelled;
+    final showAsCompleted = isCompleted && !isCancelled;
 
     return SizedBox(
       child: Column(
@@ -67,12 +92,18 @@ class ProgressTile extends StatelessWidget {
                           Padding(
                             padding: EdgeInsets.only(right: 8.0),
                             child: Text(
-                              isPhoto ? 'Sending Photos' : 'Sending Videos',
+                              isPhoto
+                                  ? (isSending
+                                        ? 'Sending Photos'
+                                        : 'Receiving Photos')
+                                  : (isSending
+                                        ? 'Sending Videos'
+                                        : 'Receiving Videos'),
                               style: AppTypography.link16Medium,
                             ),
                           ),
 
-                          if (isCompleted && !isCancelled)
+                          if (showAsCompleted)
                             Image.asset(
                               'assets/images/done.png',
                               width: 24.0,
@@ -99,10 +130,30 @@ class ProgressTile extends StatelessWidget {
             padding: EdgeInsets.only(bottom: 8.0),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16.0),
-              child: RoundedLinearProgressIndicator(
-                value: progress / 100,
-                height: 8.0,
-                backgroundColor: AppColors.extraLightGray,
+              child: Stack(
+                children: [
+                  // Фоновый прогресс бар
+                  Container(
+                    height: 8.0,
+                    decoration: BoxDecoration(
+                      color: AppColors.extraLightGray,
+                      borderRadius: BorderRadius.circular(16.0),
+                    ),
+                  ),
+
+                  // Заполненная часть прогресса
+                  AnimatedContainer(
+                    duration: Duration(milliseconds: 300),
+                    height: 8.0,
+                    width:
+                        (MediaQuery.of(context).size.width - 96) *
+                        (progress / 100),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(16.0),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -119,17 +170,30 @@ class ProgressTile extends StatelessWidget {
               ),
 
               // Виджет с текстом прогресса
-              _buildProgressText(isCompleted, totalReceived, totalSize),
+              _buildProgressText(
+                showAsCompleted,
+                progress,
+                totalReceived,
+                totalSize,
+                isSending: isSending,
+              ),
             ],
           ),
 
-          // Кнопка отмены (показываем только если передача не завершена и не отменена)
-          if (progress < 100 && !isCancelled)
+          // Кнопка отмены показываем только если передача не в финальном состоянии
+          if (!isFinalState)
             Padding(
               padding: EdgeInsets.only(top: 16.0),
               child: CustomButton.primary(
                 title: isSending ? 'Cancel sending' : 'Cancel receiving',
-                onPressed: () => onTransferCancel(transferId),
+                onPressed: () {
+                  // Отменяем все неотмененные передачи в этой группе
+                  for (final transfer in transfers) {
+                    if (cancelledTransfers[transfer.transferId] != true) {
+                      onTransferCancel(transfer.transferId);
+                    }
+                  }
+                },
               ),
             ),
         ],
@@ -143,19 +207,45 @@ class ProgressTile extends StatelessWidget {
     );
   }
 
+  // Логика определения завершенности передачи - ФИКС ДЛЯ 100% ПРОГРЕССА
+  bool _isTransferCompleted({
+    required double progress,
+    required bool hasCancelledTransfer,
+    required int totalFiles,
+    required int completedFiles,
+    required bool isSending,
+  }) {
+    // ВАЖНО: Если прогресс 100%, передача считается завершенной независимо от флага отмены
+    // (возможно отмена произошла уже после фактического завершения)
+    if (progress >= 100) return true;
+
+    // Если передача отменена, она не считается завершенной (кроме случая выше)
+    if (hasCancelledTransfer) return false;
+
+    // Для клиента (прием): завершено, если получены все файлы
+    if (!isSending) {
+      return completedFiles >= totalFiles && totalFiles > 0;
+    }
+
+    // Для сервера (отправка): завершено, если прогресс 100%
+    return false; // уже проверено выше
+  }
+
   Widget _buildProgressText(
-    bool isCompleted,
+    bool showAsCompleted,
+    double progress,
     int totalReceived,
-    int totalSize,
-  ) {
-    if (isCompleted) {
-      // Показываем только общий размер с акцентным цветом
+    int totalSize, {
+    required bool isSending,
+  }) {
+    if (showAsCompleted) {
+      // Для завершенных показываем общий размер с акцентным цветом
       return Text(
         FileUtils.formatBytes(totalSize, totalSize, showBoth: false),
         style: AppTypography.link12Regular.copyWith(color: AppColors.accent),
       );
     } else {
-      // Показываем прогресс с выделением переданных байтов
+      // Для незавершенных показываем прогресс с выделением
       final fullText = FileUtils.formatBytes(
         totalReceived,
         totalSize,
@@ -184,6 +274,7 @@ class ProgressTile extends StatelessWidget {
 
   double _calculateAverageProgress(List<FileTransfer> transfers) {
     if (transfers.isEmpty) return 0.0;
+
     final total = transfers.fold(
       0.0,
       (sum, transfer) => sum + transfer.progress,

@@ -20,7 +20,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
   String? _cancellationMessage;
   bool _hasTransferStarted = false;
 
-  // Храним историю передач, чтобы показывать карточки даже после отмены
+  // Храним историю передач с их последним состоянием
   final Map<String, FileTransfer> _transferHistory = {};
   bool _allTransfersCancelled = false;
 
@@ -64,6 +64,25 @@ class _ProgressScreenState extends State<ProgressScreen> {
           : 'Are you sure you want to stop receiving files? Your transfer will be interrupted',
       cancelTitle: widget.isSending ? 'Keep sending' : 'Keep receiving',
       onDestructivePressed: () async {
+        // Сохраняем текущее состояние передачи перед отменой
+        final currentTransfers = service.activeTransfers.values.toList();
+        for (final transfer in currentTransfers) {
+          _transferHistory[transfer.transferId] = FileTransfer(
+            transferId: transfer.transferId,
+            fileName: transfer.fileName,
+            fileSize: transfer.fileSize,
+            fileType: transfer.fileType,
+            file: transfer.file,
+            targetPath: transfer.targetPath,
+            onProgress: transfer.onProgress,
+            onComplete: transfer.onComplete,
+            onError: transfer.onError,
+            sendMessage: transfer.sendMessage,
+            totalFiles: transfer.totalFiles,
+            completedFiles: transfer.completedFiles,
+          )..receivedBytes = transfer.receivedBytes;
+        }
+
         // Помечаем передачу как отмененную
         if (mounted) {
           setState(() => _cancelledTransfers[transferId] = true);
@@ -76,8 +95,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
         _checkTransferCompletion();
 
         if (mounted) {
-          // Показываем кнопку "Go to main menu" только если все передачи отменены
-          _checkTransferCompletion();
+          setState(() {});
         }
       },
     );
@@ -90,6 +108,32 @@ class _ProgressScreenState extends State<ProgressScreen> {
         _shouldShowCancellationToast = true;
         _cancellationMessage = message;
 
+        // Сохраняем текущее состояние передач
+        final service = Provider.of<FileTransferService>(
+          context,
+          listen: false,
+        );
+        final currentTransfers = service.activeTransfers.values.toList();
+        for (final transfer in currentTransfers) {
+          _transferHistory[transfer.transferId] = FileTransfer(
+            transferId: transfer.transferId,
+            fileName: transfer.fileName,
+            fileSize: transfer.fileSize,
+            fileType: transfer.fileType,
+            file: transfer.file,
+            targetPath: transfer.targetPath,
+            onProgress: transfer.onProgress,
+            onComplete: transfer.onComplete,
+            onError: transfer.onError,
+            sendMessage: transfer.sendMessage,
+            totalFiles: transfer.totalFiles,
+            completedFiles: transfer.completedFiles,
+          )..receivedBytes = transfer.receivedBytes;
+
+          // Помечаем как отмененную с другой стороны
+          _cancelledTransfers[transfer.transferId] = true;
+        }
+
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkTransferCompletion();
         });
@@ -97,15 +141,35 @@ class _ProgressScreenState extends State<ProgressScreen> {
     }
   }
 
+  // В ProgressScreen, в методе _checkTransferCompletion
   void _checkTransferCompletion() {
     final service = Provider.of<FileTransferService>(context, listen: false);
     final transfers = service.activeTransfers.values.toList();
 
-    // Обновляем историю передач
+    // Сохраняем текущие передачи в историю
     for (final transfer in transfers) {
-      if (!_transferHistory.containsKey(transfer.transferId)) {
-        _transferHistory[transfer.transferId] = transfer;
+      // ВАЖНО: Если прогресс 100%, передача считается завершенной
+      // и не должна быть помечена как отмененная
+      if (transfer.progress >= 100) {
+        // Если передача завершена, удаляем ее из списка отмененных
+        _cancelledTransfers.remove(transfer.transferId);
       }
+
+      // Сохраняем в историю всегда
+      _transferHistory[transfer.transferId] = FileTransfer(
+        transferId: transfer.transferId,
+        fileName: transfer.fileName,
+        fileSize: transfer.fileSize,
+        fileType: transfer.fileType,
+        file: transfer.file,
+        targetPath: transfer.targetPath,
+        onProgress: transfer.onProgress,
+        onComplete: transfer.onComplete,
+        onError: transfer.onError,
+        sendMessage: transfer.sendMessage,
+        totalFiles: transfer.totalFiles,
+        completedFiles: transfer.completedFiles,
+      )..receivedBytes = transfer.receivedBytes;
     }
 
     // Проверяем, начались ли передачи (есть хотя бы один байт получено или передача отменена)
@@ -123,52 +187,60 @@ class _ProgressScreenState extends State<ProgressScreen> {
           );
     }
 
-    if (transfers.isEmpty && _transferHistory.isEmpty) {
+    // Объединяем активные передачи и историю
+    final allTransfersMap = <String, FileTransfer>{};
+
+    // Добавляем активные передачи
+    for (final transfer in transfers) {
+      allTransfersMap[transfer.transferId] = transfer;
+    }
+
+    // Добавляем исторические передачи, которые не активны сейчас
+    for (final entry in _transferHistory.entries) {
+      if (!allTransfersMap.containsKey(entry.key)) {
+        allTransfersMap[entry.key] = entry.value;
+      }
+    }
+
+    final allTransfers = allTransfersMap.values.toList();
+
+    if (allTransfers.isEmpty) {
       // Никогда не было передач
       _showGoToMainMenu = false;
       _allTransfersCancelled = false;
     } else {
-      // Проверяем состояние текущих и исторических передач
-      final allTransfers = [...transfers, ..._transferHistory.values];
-      final uniqueTransfers = <String, FileTransfer>{};
+      // Проверяем состояние всех передач
+      bool allCompletedOrCancelled = true;
+      bool anyActive = false;
 
       for (final transfer in allTransfers) {
-        uniqueTransfers[transfer.transferId] = transfer;
-      }
+        final isCancelled = _cancelledTransfers[transfer.transferId] == true;
+        final isCompleted = transfer.progress >= 100;
+        final hasStarted = transfer.receivedBytes > 0;
 
-      final allTransfersList = uniqueTransfers.values.toList();
-
-      if (allTransfersList.isEmpty) {
-        _showGoToMainMenu = false;
-        _allTransfersCancelled = false;
-      } else {
-        bool allCompletedOrCancelled = true;
-        bool anyActive = false;
-
-        for (final transfer in allTransfersList) {
-          final isCancelled = _cancelledTransfers[transfer.transferId] == true;
-          final isCompleted = transfer.progress >= 100;
-          final hasStarted = transfer.receivedBytes > 0;
-
-          if (hasStarted && !isCancelled && !isCompleted) {
-            allCompletedOrCancelled = false;
-            anyActive = true;
-          } else if (!hasStarted && !isCancelled) {
-            // Передача еще не началась и не отменена - считаем как активную
-            allCompletedOrCancelled = false;
-          }
+        // ВАЖНО: Если передача завершена (100%), она не считается активной
+        if (isCompleted) {
+          // Завершенная передача - не активна
+        } else if (hasStarted && !isCancelled) {
+          // Активная незавершенная и неотмененная передача
+          allCompletedOrCancelled = false;
+          anyActive = true;
+        } else if (!hasStarted &&
+            !isCancelled &&
+            transfers.any((t) => t.transferId == transfer.transferId)) {
+          // Передача еще не началась, но она в активных - считаем как активную
+          allCompletedOrCancelled = false;
         }
-
-        // Показываем кнопку только если ВСЕ передачи завершены ИЛИ отменены
-        _showGoToMainMenu = allCompletedOrCancelled;
-
-        _allTransfersCancelled =
-            allTransfersList.isNotEmpty &&
-            !anyActive &&
-            allTransfersList.every(
-              (t) => _cancelledTransfers[t.transferId] == true,
-            );
       }
+
+      // Показываем кнопку только если ВСЕ передачи завершены ИЛИ отменены
+      _showGoToMainMenu = allCompletedOrCancelled;
+
+      // Все передачи отменены только если нет активных и все отменены
+      _allTransfersCancelled =
+          allTransfers.isNotEmpty &&
+          !anyActive &&
+          allTransfers.every((t) => _cancelledTransfers[t.transferId] == true);
     }
 
     _stopServerIfAllTransfersComplete(service, transfers);
@@ -213,35 +285,76 @@ class _ProgressScreenState extends State<ProgressScreen> {
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<FileTransferService>(context);
-    final transfers = service.activeTransfers.values.toList();
+    final activeTransfers = service.activeTransfers.values.toList();
 
-    // Используем историю передач, если текущие передачи пустые
-    final allTransfers = transfers.isNotEmpty
-        ? transfers
-        : _transferHistory.values.toList();
+    // Объединяем активные передачи и историю для отображения
+    final allTransfersMap = <String, FileTransfer>{};
 
-    // Группируем по типу из всех доступных передач
+    // Добавляем активные передачи
+    for (final transfer in activeTransfers) {
+      allTransfersMap[transfer.transferId] = transfer;
+    }
+
+    // Добавляем исторические передачи, которые не активны сейчас
+    for (final entry in _transferHistory.entries) {
+      if (!allTransfersMap.containsKey(entry.key)) {
+        allTransfersMap[entry.key] = entry.value;
+      }
+    }
+
+    final allTransfers = allTransfersMap.values.toList();
+
+    // Правильная группировка передач
     final photoTransfers = allTransfers
         .where(
-          (t) => t.fileType.startsWith('image/') || t.fileType == 'image/mixed',
+          (t) =>
+              t.transferId.startsWith('photos_') ||
+              t.fileType == 'image/mixed' ||
+              (t.fileType.startsWith('image/') &&
+                  !t.transferId.startsWith('videos_')),
         )
         .toList();
 
     final videoTransfers = allTransfers
         .where(
-          (t) => t.fileType.startsWith('video/') || t.fileType == 'video/mixed',
+          (t) =>
+              t.transferId.startsWith('videos_') ||
+              t.fileType == 'video/mixed' ||
+              (t.fileType.startsWith('video/') &&
+                  !t.transferId.startsWith('photos_')),
         )
         .toList();
 
-    // Определяем, были ли фото/видео передачи (даже если отменены)
+    // Определяем, были ли фото/видео передачи
     final hadPhotoTransfers = photoTransfers.isNotEmpty;
     final hadVideoTransfers = videoTransfers.isNotEmpty;
+
+    // Для отладки
+    if (photoTransfers.isNotEmpty) {
+      print('📸 Фото передач: ${photoTransfers.length} шт.');
+      for (final t in photoTransfers) {
+        print(
+          '  - ${t.transferId}: ${t.fileName}, прогресс: ${t.progress}%, '
+          'отменена: ${_cancelledTransfers[t.transferId] == true}',
+        );
+      }
+    }
+
+    if (videoTransfers.isNotEmpty) {
+      print('🎥 Видео передач: ${videoTransfers.length} шт.');
+      for (final t in videoTransfers) {
+        print(
+          '  - ${t.transferId}: ${t.fileName}, прогресс: ${t.progress}%, '
+          'отменена: ${_cancelledTransfers[t.transferId] == true}',
+        );
+      }
+    }
 
     return Scaffold(
       appBar: CustomAppBar(
         title: widget.isSending ? 'Sending files' : 'Receiving files',
         onBackPressed: () async => {
-          if (transfers.isEmpty)
+          if (activeTransfers.isEmpty && _transferHistory.isEmpty)
             Navigator.pop(context)
           else
             await DestructiveDialog.show(
@@ -272,7 +385,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       isPhoto: true,
                       isSending: widget.isSending,
                       service: service,
-                      transfers: allTransfers,
+                      transfers: photoTransfers,
                       cancelledTransfers: _cancelledTransfers,
                       onTransferCancel: (id) =>
                           _cancelTransfer(service: service, transferId: id),
@@ -287,7 +400,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       isPhoto: false,
                       isSending: widget.isSending,
                       service: service,
-                      transfers: allTransfers,
+                      transfers: videoTransfers,
                       cancelledTransfers: _cancelledTransfers,
                       onTransferCancel: (id) =>
                           _cancelTransfer(service: service, transferId: id),
