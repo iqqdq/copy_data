@@ -101,8 +101,6 @@ class WebSocketClientService extends ChangeNotifier {
           print('❌ Ошибка подключения к порту 8081: $e2');
           throw e;
         }
-      } else {
-        throw e;
       }
     }
   }

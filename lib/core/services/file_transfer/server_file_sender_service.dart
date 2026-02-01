@@ -18,8 +18,6 @@ class ServerFileSenderService {
   }) : _videoConverter = videoConverter,
        _transferManager = transferManager;
 
-  // MARK: - ОТПРАВКА ФАЙЛОВ С СЕРВЕРА НА КЛИЕНТ
-
   Future<void> sendFilesToClient(
     List<File> files,
     WebSocket client,

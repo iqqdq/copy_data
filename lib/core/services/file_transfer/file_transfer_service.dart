@@ -12,44 +12,47 @@ class FileTransferService extends ChangeNotifier {
   static const int CHUNK_SIZE = 32 * 1024; // 32KB
   static const int PORT = 8080;
 
+  // Зависимости
   final WebSocketServerService _webSocketServer = WebSocketServerService();
   final WebSocketClientService _webSocketClient = WebSocketClientService();
-
   final MediaManagerService _mediaManager = MediaManagerService();
   final VideoConverterService _videoConverter = VideoConverterService();
   final GallerySaverService _gallerySaver = GallerySaverService();
-
   final FileTransferManager _transferManager = FileTransferManager();
 
   late ClientFileReceiverService _clientFileReceiver;
   late ServerFileSenderService _serverFileSender;
 
-  String _status = 'Готов';
+  // UI состояние
   bool _shouldShowSubscriptionDialog = false;
 
-  // State
+  // Колбэки
+  VoidCallback? _onSubscriptionRequired;
+  void Function(String message)? _onRemoteCancellationCallback;
+
+  // MARK: - ГЕТТЕРЫ
+
+  // UI состояние
   bool get shouldShowSubscriptionDialog => _shouldShowSubscriptionDialog;
 
-  // Server
+  // Сервер
   bool get isServerRunning => _webSocketServer.isServerRunning;
   String get localIp => _webSocketServer.localIp;
   List<WebSocket> get connectedClients => _webSocketServer.connectedClients;
-  String get status => _status; // TODO: DELETE?
 
-  // Client
+  // Клиент
   String? get connectedServerIp => _webSocketClient.connectedServerIp;
   String? get connectedServerName => _webSocketClient.connectedServerName;
   bool get isConnected => _webSocketClient.isConnected;
 
-  // Transfer
+  // Передачи
   Map<String, FileTransfer> get activeTransfers =>
       _transferManager.activeTransfers;
 
-  // Media
+  // Медиа
   List<ReceivedMedia> get receivedMedia => _mediaManager.receivedMedia;
 
-  // Колбэк для уведомления UI об отсутствии подписки
-  VoidCallback? _onSubscriptionRequired;
+  // MARK: - УПРАВЛЕНИЕ КОЛБЭКАМИ
 
   void setOnSubscriptionRequiredCallback(VoidCallback callback) {
     _onSubscriptionRequired = callback;
@@ -59,13 +62,12 @@ class FileTransferService extends ChangeNotifier {
     _onSubscriptionRequired = null;
   }
 
-  // Колбэк для уведомления UI об отмене с другой стороны
-  void Function(String message)? _onRemoteCancellationCallback;
-
   void setRemoteCancellationCallback(Function(String) callback) {
     _onRemoteCancellationCallback = callback;
     _transferManager.setRemoteCancellationCallback(callback);
   }
+
+  // MARK: - ИНИЦИАЛИЗАЦИЯ И ОЧИСТКА
 
   FileTransferService() {
     _initialize();
@@ -85,16 +87,8 @@ class FileTransferService extends ChangeNotifier {
     );
 
     _webSocketClient.setMessageHandler(_handleClientMessage);
-
-    _webSocketClient.setConnectionLostHandler(() {
-      _status = 'Отключено от сервера';
-      notifyListeners();
-    });
-
-    _webSocketClient.setConnectionErrorHandler((error) {
-      _status = 'Ошибка: $error';
-      notifyListeners();
-    });
+    _webSocketClient.setConnectionLostHandler(() => notifyListeners());
+    _webSocketClient.setConnectionErrorHandler((error) => notifyListeners());
 
     _transferManager.setRemoteCancellationCallback((message) {
       if (_onRemoteCancellationCallback != null) {
@@ -105,7 +99,6 @@ class FileTransferService extends ChangeNotifier {
 
   @override
   void dispose() {
-    // Освобождаем ресурсы сервисов
     _transferManager.dispose();
     _webSocketServer.dispose();
     _videoConverter.dispose();
@@ -120,31 +113,135 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> startServer() async {
     try {
-      _status = 'Запуск сервера...';
-      notifyListeners();
-
-      // Настраиваем обработчики сообщений
       _webSocketServer.setMessageHandler(_handleServerMessage);
-      _webSocketServer.setClientConnectedHandler((client) {
-        notifyListeners();
-      });
-      _webSocketServer.setClientDisconnectedHandler((client) {
-        notifyListeners();
-      });
+      _webSocketServer.setClientConnectedHandler((_) => notifyListeners());
+      _webSocketServer.setClientDisconnectedHandler((_) => notifyListeners());
 
       await _webSocketServer.startServer();
-
-      _status = 'Сервер запущен ✅\nIP: ${_webSocketServer.localIp}';
       notifyListeners();
     } catch (e, stackTrace) {
       print('💥 ОШИБКА ЗАПУСКА СЕРВЕРА: $e');
       print('Stack: $stackTrace');
-
-      _status = 'Ошибка: $e';
       notifyListeners();
       rethrow;
     }
   }
+
+  Future<void> stopServer() async {
+    try {
+      print('🛑 Остановка сервера...');
+
+      await _transferManager.closeAllFileReceivers();
+      _transferManager.clearAllTransfers();
+      await _webSocketServer.stopServer();
+
+      notifyListeners();
+      print('✅ Сервер остановлен, все передачи очищены');
+    } catch (e) {
+      print('❌ Ошибка остановки сервера: $e');
+    }
+  }
+
+  // MARK: - ОТПРАВКА ФАЙЛОВ С СЕРВЕРА
+
+  Future<void> sendFilesToClient(
+    List<File> files,
+    WebSocket? targetClient,
+  ) async {
+    if (_webSocketServer.connectedClients.isEmpty) {
+      throw Exception('Нет подключенных клиентов');
+    }
+
+    final client = targetClient ?? _webSocketServer.connectedClients.first;
+
+    await _serverFileSender.sendFilesToClient(
+      files,
+      client,
+      _webSocketServer.sendToClient,
+    );
+
+    notifyListeners();
+  }
+
+  Future<void> sendFilesToConnectedClient(List<File> files) async {
+    if (_webSocketServer.connectedClients.isEmpty) {
+      throw Exception('Нет подключенных клиентов');
+    }
+    await sendFilesToClient(files, _webSocketServer.connectedClients.first);
+  }
+
+  Future<void> sendFilesToSpecificClient(
+    List<File> files,
+    WebSocket client,
+  ) async {
+    await sendFilesToClient(files, client);
+  }
+
+  // MARK: - КЛИЕНТСКИЕ МЕТОДЫ
+
+  Future<void> connectToServer(String serverIp, {int port = PORT}) async {
+    try {
+      final handshakeData = {
+        'type': 'handshake',
+        'clientInfo': {
+          'name': await DeviceUtils.getDeviceName(),
+          'platform': Platform.operatingSystem,
+          'version': '1.0.0',
+        },
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      await _webSocketClient.connectToServer(
+        serverIp,
+        port: port,
+        handshakeData: handshakeData,
+      );
+      notifyListeners();
+    } catch (e) {
+      print('💥 ОШИБКА ПОДКЛЮЧЕНИЯ: $e');
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> disconnect() async {
+    await _webSocketClient.disconnect();
+    notifyListeners();
+  }
+
+  Future<void> clearClientTransfers() async {
+    print('🧹 Очищаю клиентские передачи...');
+
+    if (_webSocketClient.isConnected) {
+      await disconnect();
+    }
+
+    await _transferManager.closeAllFileReceivers();
+    _transferManager.clearAllTransfers();
+
+    notifyListeners();
+    print('✅ Клиентские передачи очищены');
+  }
+
+  // MARK: - УПРАВЛЕНИЕ ПЕРЕДАЧАМИ
+
+  Future<void> cancelTransfer(String transferId) async {
+    try {
+      print('🛑 Инициация отмены передачи: $transferId');
+      await _transferManager.cancelTransfer(
+        transferId,
+        notifyRemote: true,
+        sendToClient: _webSocketServer.sendToClient,
+        sendClientMessage: _webSocketClient.sendMessage,
+        connectedClients: _webSocketServer.connectedClients,
+      );
+      notifyListeners();
+    } catch (e) {
+      print('❌ Ошибка при отмене передачи: $e');
+    }
+  }
+
+  // MARK: - ОБРАБОТКА СООБЩЕНИЙ СЕРВЕРА
 
   void _handleServerMessage(WebSocket socket, Map<String, dynamic> data) {
     final type = data['type'] as String?;
@@ -172,15 +269,43 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  void _handleCancelTransferFromClient(
+  Future<void> _handleClientHandshake(
     WebSocket socket,
     Map<String, dynamic> data,
-  ) {
-    try {
-      _transferManager.handleRemoteCancellation(data);
-    } catch (e) {
-      print('❌ Ошибка обработки отмены от клиента: $e');
+  ) async {
+    print('🤝 Handshake от клиента: ${data['clientInfo']}');
+
+    if (!isSubscribed.value) {
+      print('⚠️ У сервера нет подписки, отправляю уведомление клиенту');
+
+      await _webSocketServer.sendToClient(socket, {
+        'type': 'subscription_required',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      await Future.delayed(Duration(milliseconds: 500));
+      try {
+        await socket.close();
+      } catch (e) {
+        print('⚠️ Ошибка закрытия сокета: $e');
+      }
+
+      notifyListeners();
+      return;
     }
+
+    await _webSocketServer.sendToClient(socket, {
+      'type': 'handshake_ack',
+      'message': 'Добро пожаловать',
+      'serverInfo': {
+        'name': await DeviceUtils.getDeviceName(),
+        'platform': Platform.operatingSystem,
+        'ip': _webSocketServer.localIp,
+      },
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+
+    notifyListeners();
   }
 
   void _handleProgressUpdateFromClient(
@@ -202,10 +327,8 @@ class FileTransferService extends ChangeNotifier {
           '(${FileUtils.formatBytes(receivedBytes)} / ${FileUtils.formatBytes(totalBytes)})',
         );
 
-        // Обновляем прогресс на сервере для отображения прогресса на клиенте
         final transfer = _transferManager.getTransfer(transferId);
         if (transfer != null) {
-          // Обновляем прогресс на стороне клиента (для отображения на сервере)
           transfer.updateProgress(receivedBytes);
           notifyListeners();
         }
@@ -215,46 +338,15 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  Future<void> _handleClientHandshake(
+  void _handleCancelTransferFromClient(
     WebSocket socket,
     Map<String, dynamic> data,
-  ) async {
-    print('🤝 Handshake от клиента: ${data['clientInfo']}');
-
-    // Проверяем наличие подписки
-    if (!isSubscribed.value) {
-      print('⚠️ У сервера нет подписки, отправляю уведомление клиенту');
-
-      await _webSocketServer.sendToClient(socket, {
-        'type': 'subscription_required',
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-
-      // Закрываем соединение - сервис сам удалит клиента
-      await Future.delayed(Duration(milliseconds: 500));
-      try {
-        await socket.close();
-      } catch (e) {
-        print('⚠️ Ошибка закрытия сокета: $e');
-      }
-
-      notifyListeners();
-      return;
+  ) {
+    try {
+      _transferManager.handleRemoteCancellation(data);
+    } catch (e) {
+      print('❌ Ошибка обработки отмены от клиента: $e');
     }
-
-    // Если подписка есть - продолжаем обычный handshake
-    await _webSocketServer.sendToClient(socket, {
-      'type': 'handshake_ack',
-      'message': 'Добро пожаловать',
-      'serverInfo': {
-        'name': await DeviceUtils.getDeviceName(),
-        'platform': Platform.operatingSystem,
-        'ip': _webSocketServer.localIp,
-      },
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-
-    notifyListeners();
   }
 
   void _handleChunkAckFromClient(WebSocket socket, Map<String, dynamic> data) {
@@ -280,118 +372,7 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  // Метод для очистки передач на клиенте
-  Future<void> clearClientTransfers() async {
-    print('🧹 Очищаю клиентские передачи...');
-
-    // Отключаем от сервера
-    if (_webSocketClient.isConnected) {
-      await disconnect();
-    }
-
-    // Закрываем все активные файловые потоки
-    await _transferManager.closeAllFileReceivers();
-    _transferManager.clearAllTransfers();
-
-    // Сбрасываем состояния
-    _status = 'Готов';
-
-    notifyListeners();
-    print('✅ Клиентские передачи очищены');
-  }
-
-  Future<void> stopServer() async {
-    try {
-      print('🛑 Остановка сервера...');
-
-      // Очищаем все активные передачи
-      await _transferManager.closeAllFileReceivers();
-      _transferManager.clearAllTransfers();
-
-      // Останавливаем WebSocket сервер
-      await _webSocketServer.stopServer();
-
-      // Сбрасываем состояния
-      _status = 'Сервер остановлен';
-
-      notifyListeners();
-
-      print('✅ Сервер остановлен, все передачи очищены');
-    } catch (e) {
-      print('❌ Ошибка остановки сервера: $e');
-    }
-  }
-
-  // MARK: - ОТПРАВКА ФАЙЛОВ С СЕРВЕРА НА КЛИЕНТ
-
-  Future<void> sendFilesToClient(
-    List<File> files,
-    WebSocket? targetClient,
-  ) async {
-    if (_webSocketServer.connectedClients.isEmpty) {
-      throw Exception('Нет подключенных клиентов');
-    }
-
-    final client = targetClient ?? _webSocketServer.connectedClients.first;
-
-    await _serverFileSender.sendFilesToClient(
-      files,
-      client,
-      _webSocketServer.sendToClient,
-    );
-
-    notifyListeners();
-  }
-
-  Future<void> cancelTransfer(String transferId) async {
-    try {
-      print('🛑 Инициация отмены передачи: $transferId');
-      await _transferManager.cancelTransfer(
-        transferId,
-        notifyRemote: true,
-        sendToClient: _webSocketServer.sendToClient,
-        sendClientMessage: _webSocketClient.sendMessage,
-        connectedClients: _webSocketServer.connectedClients,
-      );
-      notifyListeners();
-    } catch (e) {
-      print('❌ Ошибка при отмене передачи: $e');
-    }
-  }
-  // MARK: - КЛИЕНТСКИЕ МЕТОДЫ (ПРИЕМ ФАЙЛОВ)
-
-  void resetSubscriptionDialogFlag() {
-    _shouldShowSubscriptionDialog = false;
-    notifyListeners();
-  }
-
-  Future<void> connectToServer(String serverIp, {int port = PORT}) async {
-    try {
-      final handshakeData = {
-        'type': 'handshake',
-        'clientInfo': {
-          'name': await DeviceUtils.getDeviceName(),
-          'platform': Platform.operatingSystem,
-          'version': '1.0.0',
-        },
-        'timestamp': DateTime.now().toIso8601String(),
-      };
-
-      await _webSocketClient.connectToServer(
-        serverIp,
-        port: port,
-        handshakeData: handshakeData,
-      );
-
-      _status = 'Подключено к серверу';
-      notifyListeners();
-    } catch (e) {
-      print('💥 ОШИБКА ПОДКЛЮЧЕНИЯ: $e');
-      _status = 'Ошибка: ${e.toString().split('\n').first}';
-      notifyListeners();
-      rethrow;
-    }
-  }
+  // MARK: - ОБРАБОТКА СООБЩЕНИЙ КЛИЕНТА
 
   void _handleClientMessage(Map<String, dynamic> data) {
     final type = data['type'] as String?;
@@ -429,32 +410,28 @@ class FileTransferService extends ChangeNotifier {
     print('⚠️ Получено сообщение: требуется подписка на сервере');
 
     disconnect();
-
     _shouldShowSubscriptionDialog = true;
     notifyListeners();
 
-    // Вызываем callback если он установлен
     if (_onSubscriptionRequired != null) {
       _onSubscriptionRequired!();
     }
+  }
+
+  void resetSubscriptionDialogFlag() {
+    _shouldShowSubscriptionDialog = false;
+    notifyListeners();
   }
 
   void _sendClientMessage(Map<String, dynamic> message) {
     _webSocketClient.sendMessage(message);
   }
 
-  Future<void> disconnect() async {
-    await _webSocketClient.disconnect();
-    _status = 'Отключено';
-    notifyListeners();
-  }
-
-  // MARK: - УПРАВЛЕНИЕ ПОЛУЧЕННЫМИ МЕДИА
+  // MARK: - УПРАВЛЕНИЕ МЕДИА
 
   Future<void> openMediaInGallery(ReceivedMedia media) async {
     try {
       print('📱 Открытие медиа: ${media.file.path}');
-      _status = 'Открытие: ${media.fileName}';
       notifyListeners();
     } catch (e) {
       print('❌ Ошибка открытия медиа: $e');
@@ -469,29 +446,8 @@ class FileTransferService extends ChangeNotifier {
     await _mediaManager.refreshMedia();
   }
 
-  // MARK: - ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ UI
+  // MARK: - ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
 
-  // Метод для сервера: отправить файлы клиенту
-  Future<void> sendFilesToConnectedClient(List<File> files) async {
-    if (_webSocketServer.connectedClients.isEmpty) {
-      throw Exception('Нет подключенных клиентов');
-    }
-
-    // Отправляем файлы первому подключенному клиенту
-    await sendFilesToClient(files, _webSocketServer.connectedClients.first);
-  }
-
-  // Метод для сервера: отправить файлы конкретному клиенту
-  Future<void> sendFilesToSpecificClient(
-    List<File> files,
-    WebSocket client,
-  ) async {
-    await sendFilesToClient(files, client);
-  }
-
-  // Получить список подключенных клиентов (для UI сервера)
-
-  // Получить информацию о клиенте
   String getClientInfo(WebSocket client) {
     final index = _webSocketServer.connectedClients.indexOf(client);
     return 'Клиент ${index + 1}';
