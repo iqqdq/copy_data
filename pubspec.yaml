@@ -1,4 +1,4 @@
-name: local_file_transfer
+name: copy_data
 description: "A new Flutter project."
 
 publish_to: 'none'

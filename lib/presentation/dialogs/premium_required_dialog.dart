@@ -7,7 +7,6 @@ class PremiumRequiredDialog {
   static Future<void> show(
     BuildContext context, {
     required VoidCallback onGetPermiumPressed,
-    required VoidCallback onCancelPressed,
   }) async {
     final result = await showOkCancelAlertDialog(
       context: context,
@@ -17,6 +16,6 @@ class PremiumRequiredDialog {
       okLabel: 'Get Premium',
     );
 
-    result == OkCancelResult.ok ? onGetPermiumPressed() : onCancelPressed();
+    if (result == OkCancelResult.ok) ;
   }
 }

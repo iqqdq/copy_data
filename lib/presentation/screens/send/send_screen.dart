@@ -94,17 +94,22 @@ class _SendScreenState extends State<SendScreen> {
 
   Future<void> _pickAndSendMedia() async {
     final service = Provider.of<FileTransferService>(context, listen: false);
-    if (service.connectedClients.isEmpty) {
-      return;
-    }
 
     try {
-      // Проверяем подписку для отправки на Android
+      // Проверяем подписку для отправки с iOS на Android
       if (_selectedIndex == 1 && !isSubscribed.value) {
-        // Возвращаемся на предыдущую вкладку
-        if (mounted) {
-          setState(() => _selectedIndex = 0);
-        }
+        PremiumRequiredDialog.show(
+          context,
+          onGetPermiumPressed: () {
+            Navigator.pushNamed(context, AppRoutes.paywall);
+          },
+        );
+
+        return;
+      }
+
+      // Если произошел разрыв соединения
+      if (service.connectedClients.isEmpty) {
         return;
       }
 
@@ -153,7 +158,6 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   void _onTabSelected(int index) {
-    // Сначала переключаем таб
     if (!_tabInitialized[index]!) {
       setState(() {
         _selectedIndex = index;
@@ -162,25 +166,6 @@ class _SendScreenState extends State<SendScreen> {
     } else {
       setState(() {
         _selectedIndex = index;
-      });
-    }
-
-    // Затем проверяем подписку для Android таба
-    if (index == 1 && !isSubscribed.value) {
-      // Небольшая задержка для плавного перехода таба перед показом алерта
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        PremiumRequiredDialog.show(
-          context,
-          onGetPermiumPressed: () {
-            Navigator.pushNamed(context, AppRoutes.paywall);
-          },
-          onCancelPressed: () {
-            // Возвращаем на первый таб при отмене
-            if (mounted) {
-              setState(() => _selectedIndex = 0);
-            }
-          },
-        );
       });
     }
   }

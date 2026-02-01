@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:local_file_transfer/presentation/widgets/widgets.dart';
 
 import '../../../core/core.dart';
+import '../../presentation.dart';
 
 class ReceiveScreen extends StatelessWidget {
   const ReceiveScreen({super.key});

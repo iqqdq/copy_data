@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../../app.dart';
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -21,12 +22,19 @@ class SettingsScreen extends StatelessWidget {
           vertical: 8.0,
         ).copyWith(bottom: MediaQuery.of(context).padding.bottom),
         children: [
-          // TODO:
-          Padding(
-            padding: EdgeInsets.only(bottom: 16.0),
-            child: SettingsPremiumTile(
-              onPressed: () => Navigator.pushNamed(context, AppRoutes.paywall),
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: isSubscribed,
+            builder: (context, value, _) {
+              return value
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: EdgeInsets.only(bottom: 16.0),
+                      child: SettingsPremiumTile(
+                        onPressed: () =>
+                            Navigator.pushNamed(context, AppRoutes.paywall),
+                      ),
+                    );
+            },
           ),
 
           Padding(
@@ -36,13 +44,23 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
 
-          Padding(
-            padding: EdgeInsets.only(bottom: 16.0),
-            child: CustomButton.primary(
-              title: 'Subscription plans',
-              onPressed: () =>
-                  Navigator.pushNamed(context, AppRoutes.subscriptionPlans),
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: isSubscribed,
+            builder: (context, value, _) {
+              // TODO: CHECK SUB ID
+              return value
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: EdgeInsets.only(bottom: 16.0),
+                      child: CustomButton.primary(
+                        title: 'Subscription plans',
+                        onPressed: () => Navigator.pushNamed(
+                          context,
+                          AppRoutes.subscriptionPlans,
+                        ),
+                      ),
+                    );
+            },
           ),
 
           Padding(

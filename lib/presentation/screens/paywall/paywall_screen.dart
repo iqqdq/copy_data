@@ -101,12 +101,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
                               title: 'Continue',
                               isLoading: false, // TODO:
                               onPressed: () {
-                                isSubscribed.value == true
-                                    ? Navigator.pushReplacementNamed(
-                                        context,
-                                        AppRoutes.main,
-                                      )
-                                    : Navigator.canPop(context)
+                                isSubscribed.value = true;
+                                Navigator.canPop(context)
                                     ? Navigator.pop(context)
                                     : Navigator.pushReplacementNamed(
                                         context,

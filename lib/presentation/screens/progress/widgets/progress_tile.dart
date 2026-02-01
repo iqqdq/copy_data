@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:local_file_transfer/presentation/presentation.dart';
 
 import '../../../../core/core.dart';
+import '../../../presentation.dart';
 
 class ProgressTile extends StatelessWidget {
   final bool isPhoto;
@@ -25,10 +25,9 @@ class ProgressTile extends StatelessWidget {
   Widget build(BuildContext context) {
     if (transfers.isEmpty) return SizedBox.shrink();
 
-    // Проверяем, есть ли отмененные передачи в этой группе
-    bool hasCancelledTransfer = transfers.any(
-      (t) => cancelledTransfers[t.transferId] == true,
-    );
+    // Используем primaryTransfer для основных операций
+    final primaryTransfer = transfers.first;
+    final isCancelled = cancelledTransfers[primaryTransfer.transferId] == true;
 
     // Считаем общую статистику по всем передачам в группе
     final progress = _calculateAverageProgress(transfers);
@@ -44,16 +43,12 @@ class ProgressTile extends StatelessWidget {
       totalSize += transfer.fileSize;
     }
 
-    // Если передача отменена, но прогресс 100%, считаем ее завершенной
-    // (возможно отмена произошла уже после фактического завершения)
-    final isCancelled = hasCancelledTransfer;
-
     // Передача считается завершенной если:
     // 1. Прогресс 100% ИЛИ
-    // 2. Все файлы получены (для клиента) И при этом не отменена
+    // 2. Все файлы получены (для клиента)
     final isCompleted = _isTransferCompleted(
       progress: progress,
-      hasCancelledTransfer: hasCancelledTransfer,
+      isCancelled: isCancelled,
       totalFiles: totalFiles,
       completedFiles: completedFiles,
       isSending: isSending,
@@ -62,6 +57,15 @@ class ProgressTile extends StatelessWidget {
     // Определяем финальное состояние для отображения
     final isFinalState = isCompleted || isCancelled;
     final showAsCompleted = isCompleted && !isCancelled;
+
+    // Определяем, показывать ли кнопку отмены
+    // Кнопка показывается только если:
+    // 1. Передача не завершена
+    // 2. Передача не отменена
+    // 3. Передача активна в сервисе (т.е. можно отменить)
+    final shouldShowCancelButton =
+        !isFinalState &&
+        service.activeTransfers.containsKey(primaryTransfer.transferId);
 
     return SizedBox(
       child: Column(
@@ -180,19 +184,16 @@ class ProgressTile extends StatelessWidget {
             ],
           ),
 
-          // Кнопка отмены показываем только если передача не в финальном состоянии
-          if (!isFinalState)
+          // Кнопка отмены показываем только если:
+          // 1. Передача активна (не завершена и не отменена)
+          // 2. Передача существует в сервисе (можно отменить)
+          if (shouldShowCancelButton)
             Padding(
               padding: EdgeInsets.only(top: 16.0),
               child: CustomButton.primary(
                 title: isSending ? 'Cancel sending' : 'Cancel receiving',
                 onPressed: () {
-                  // Отменяем все неотмененные передачи в этой группе
-                  for (final transfer in transfers) {
-                    if (cancelledTransfers[transfer.transferId] != true) {
-                      onTransferCancel(transfer.transferId);
-                    }
-                  }
+                  onTransferCancel(primaryTransfer.transferId);
                 },
               ),
             ),
@@ -207,28 +208,27 @@ class ProgressTile extends StatelessWidget {
     );
   }
 
-  // Логика определения завершенности передачи - ФИКС ДЛЯ 100% ПРОГРЕССА
+  // Логика определения завершенности передачи
   bool _isTransferCompleted({
     required double progress,
-    required bool hasCancelledTransfer,
+    required bool isCancelled,
     required int totalFiles,
     required int completedFiles,
     required bool isSending,
   }) {
-    // ВАЖНО: Если прогресс 100%, передача считается завершенной независимо от флага отмены
-    // (возможно отмена произошла уже после фактического завершения)
-    if (progress >= 100) return true;
+    // Если отменено, не считаем завершенным
+    if (isCancelled) return false;
 
-    // Если передача отменена, она не считается завершенной (кроме случая выше)
-    if (hasCancelledTransfer) return false;
+    // Прогресс 100% = завершено
+    if (progress >= 100) return true;
 
     // Для клиента (прием): завершено, если получены все файлы
     if (!isSending) {
       return completedFiles >= totalFiles && totalFiles > 0;
     }
 
-    // Для сервера (отправка): завершено, если прогресс 100%
-    return false; // уже проверено выше
+    // Для сервера (отправка): только по прогрессу 100%
+    return false;
   }
 
   Widget _buildProgressText(

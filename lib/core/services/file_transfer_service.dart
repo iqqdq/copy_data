@@ -279,11 +279,12 @@ class FileTransferService extends ChangeNotifier {
       if (transferId != null) {
         print('🛑 Получена отмена передачи от клиента: $transferId');
 
-        // Уведомляем UI об отмене
+        // Уведомляем UI об отмене (только для этой передачи)
         if (_onRemoteCancellationCallback != null) {
           _onRemoteCancellationCallback!('The receiver canceled the transfer');
         }
 
+        // Отменяем только указанную передачу
         _cancelTransferInternal(transferId, notifyRemote: false);
       }
     } catch (e) {
@@ -397,6 +398,36 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
+  // Метод для очистки передач на клиенте
+  Future<void> clearClientTransfers() async {
+    print('🧹 Очищаю клиентские передачи...');
+
+    // Отключаем от сервера
+    if (_clientChannel != null) {
+      await disconnect();
+    }
+
+    // Закрываем все активные файловые потоки
+    final receiversCopy = Map<String, FileReceiver>.from(_fileReceivers);
+    for (final entry in receiversCopy.entries) {
+      try {
+        await entry.value.close();
+      } catch (e) {
+        print('⚠️ Ошибка закрытия приемника ${entry.key}: $e');
+      }
+    }
+    _fileReceivers.clear();
+
+    // Очищаем активные передачи
+    _activeTransfers.clear();
+
+    // Сбрасываем состояния
+    _status = 'Готов';
+
+    notifyListeners();
+    print('✅ Клиентские передачи очищены');
+  }
+
   Future<void> stopServer() async {
     try {
       print('🛑 Остановка сервера...');
@@ -404,14 +435,24 @@ class FileTransferService extends ChangeNotifier {
       // Очищаем все активные передачи
       _activeTransfers.clear();
 
+      // Создаем копию для безопасной итерации
+      final receiversCopy = Map<String, FileReceiver>.from(_fileReceivers);
+
       // Закрываем все активные файловые потоки
-      for (final receiver in _fileReceivers.values) {
-        await receiver.close();
+      for (final entry in receiversCopy.entries) {
+        try {
+          await entry.value.close();
+        } catch (e) {
+          print('⚠️ Ошибка закрытия приемника ${entry.key}: $e');
+        }
       }
       _fileReceivers.clear();
 
+      // Создаем копию для безопасной итерации
+      final clientsCopy = List<WebSocket>.from(_connectedClients);
+
       // Закрываем все подключения клиентов
-      for (final client in _connectedClients) {
+      for (final client in clientsCopy) {
         try {
           await client.close();
         } catch (e) {
@@ -574,8 +615,22 @@ class FileTransferService extends ChangeNotifier {
         '🎥 Создана групповая передача видео: ${videoFiles.length} файлов, '
         'общий размер: ${(totalVideoSize / (1024 * 1024)).toStringAsFixed(2)} MB',
       );
+
+      final videoGroupMetadata = {
+        'type': 'group_metadata',
+        'transferId': videoTransferId,
+        'fileName': '${videoFiles.length} видео',
+        'totalFiles': videoFiles.length,
+        'totalSize': totalVideoSize,
+        'fileType': 'video/mixed',
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      client.add(jsonEncode(videoGroupMetadata));
+      print('📤 Отправлены метаданные видео группы немедленно');
     }
 
+    // Уведомляем UI о создании передач
     notifyListeners();
 
     // Отправляем файлы группами
@@ -1033,9 +1088,12 @@ class FileTransferService extends ChangeNotifier {
           'timestamp': DateTime.now().toIso8601String(),
         };
 
-        if (_connectedClients.isNotEmpty) {
+        // Используем копию списка для безопасной итерации
+        final connectedClientsCopy = List<WebSocket>.from(_connectedClients);
+
+        if (connectedClientsCopy.isNotEmpty) {
           // Сервер отменяет - отправляем клиенту
-          for (final client in _connectedClients) {
+          for (final client in connectedClientsCopy) {
             try {
               client.add(jsonEncode(cancelMessage));
               print('📤 Отправлена отмена клиенту: $transferId');
@@ -1050,21 +1108,23 @@ class FileTransferService extends ChangeNotifier {
         }
       }
 
-      // Закрываем связанные файловые приемники
-      final keysToRemove = <String>[];
-      for (final entry in _fileReceivers.entries) {
-        if (entry.key.startsWith(transferId) ||
-            entry.key.contains(transferId)) {
-          print('🛑 Закрываем приемник файла: ${entry.key}');
-          await entry.value.close();
-          keysToRemove.add(entry.key);
+      // Создаем копию ключей для безопасной итерации
+      final receiverKeys = List<String>.from(_fileReceivers.keys);
+
+      for (final key in receiverKeys) {
+        // Отменяем только связанные с этой конкретной передачей приемники
+        if (key.startsWith(transferId) || key == transferId) {
+          print('🛑 Закрываем приемник файла: $key');
+          try {
+            await _fileReceivers[key]?.close();
+          } catch (e) {
+            print('⚠️ Ошибка закрытия приемника $key: $e');
+          }
+          _fileReceivers.remove(key);
         }
       }
-      for (final key in keysToRemove) {
-        _fileReceivers.remove(key);
-      }
 
-      // Удаляем передачу
+      // Удаляем только конкретную передачу
       _activeTransfers.remove(transferId);
 
       // Вызываем callback ошибки для передачи
@@ -1079,7 +1139,6 @@ class FileTransferService extends ChangeNotifier {
       rethrow;
     }
   }
-
   // =========== КЛИЕНТСКИЕ МЕТОДЫ (ПРИЕМ ФАЙЛОВ) ===========
 
   void resetSubscriptionDialogFlag() {
@@ -1215,11 +1274,12 @@ class FileTransferService extends ChangeNotifier {
       if (transferId != null) {
         print('🛑 Получена отмена передачи от сервера: $transferId');
 
-        // Уведомляем UI об отмене
+        // Уведомляем UI об отмене (только для этой передачи)
         if (_onRemoteCancellationCallback != null) {
           _onRemoteCancellationCallback!('The sender canceled the transfer');
         }
 
+        // Отменяем только указанную передачу
         _cancelTransferInternal(transferId, notifyRemote: false);
       }
     } catch (e) {
@@ -1240,44 +1300,46 @@ class FileTransferService extends ChangeNotifier {
         '($totalFiles файлов, ${_formatBytes(totalSize)})',
       );
 
-      // Создаем групповую передачу ТОЛЬКО если ее еще нет
-      if (!_activeTransfers.containsKey(transferId)) {
-        final transfer = FileTransfer(
-          transferId: transferId,
-          fileName: fileName,
-          fileSize: totalSize, // ← РАЗМЕР ИЗ СЕРВЕРА (окончательный!)
-          fileType: fileType,
-          file: File(''), // Временный файл
-          targetPath: '',
-          onProgress: (progress) {
-            notifyListeners();
-          },
-          onComplete: (file) {
-            print('✅ Групповая передача завершена: $fileName');
-          },
-          onError: (error) {
-            print('❌ Ошибка групповой передачи: $error');
-            _activeTransfers.remove(transferId);
-            notifyListeners();
-          },
-          sendMessage: (message) {
-            _sendClientMessage(message);
-          },
-          totalFiles: totalFiles,
-          completedFiles: 0,
-        );
+      // Всегда создаем групповую передачу, даже если она уже существует
+      // Это нужно для того, чтобы обновить totalFiles и totalSize
 
-        _activeTransfers[transferId] = transfer;
-        print(
-          '✅ Создана групповая передача от сервера: $transferId '
-          '($totalFiles файлов, ${_formatBytes(totalSize)})',
-        );
-        notifyListeners();
-      } else {
-        // Обновляем существующую передачу - НЕ ДОЛЖНО БЫТЬ НУЖНО
-        // но на всякий случай логируем
-        print('⚠️ Групповая передача уже существует: $transferId');
+      final transfer = FileTransfer(
+        transferId: transferId,
+        fileName: fileName,
+        fileSize: totalSize, // Окончательный размер файла (от сервера)
+        fileType: fileType,
+        file: File(''), // Временный файл
+        targetPath: '',
+        onProgress: (progress) {
+          notifyListeners();
+        },
+        onComplete: (file) {
+          print('✅ Групповая передача завершена: $fileName');
+        },
+        onError: (error) {
+          print('❌ Ошибка групповой передачи: $error');
+          _activeTransfers.remove(transferId);
+          notifyListeners();
+        },
+        sendMessage: (message) {
+          _sendClientMessage(message);
+        },
+        totalFiles: totalFiles, // Устанавливаем правильное количество файлов
+        completedFiles: 0,
+      );
+
+      _activeTransfers[transferId] = transfer;
+      print(
+        '✅ Создана/обновлена групповая передача от сервера: $transferId '
+        '($totalFiles файлов, ${_formatBytes(totalSize)})',
+      );
+
+      // Обновляем флаг наличия видео передачи для UI
+      if (transferId.startsWith('videos_') || fileType == 'video/mixed') {
+        print('🎥 Зарегистрирована видео передача: $fileName');
       }
+
+      notifyListeners();
     } catch (e) {
       print('❌ Ошибка обработки метаданных группы от сервера: $e');
     }

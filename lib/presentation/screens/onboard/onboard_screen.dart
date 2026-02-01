@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app.dart';
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -86,14 +87,19 @@ class _OnboardScreenState extends State<OnboardScreen> {
                         CustomButton.primary(
                           title: 'Continue',
                           onPressed: () => _index == _titles.length - 1
-                              ? Navigator.pushReplacement(
-                                  context,
-                                  PageRouteBuilder(
-                                    pageBuilder: (context, _, _) =>
-                                        PaywallScreen(),
-                                    transitionDuration: Duration.zero,
-                                  ),
-                                )
+                              ? isSubscribed.value == true
+                                    ? Navigator.pushReplacementNamed(
+                                        context,
+                                        AppRoutes.main,
+                                      )
+                                    : Navigator.pushReplacement(
+                                        context,
+                                        PageRouteBuilder(
+                                          pageBuilder: (context, _, _) =>
+                                              PaywallScreen(),
+                                          transitionDuration: Duration.zero,
+                                        ),
+                                      )
                               : setState(() => _index = (_index + 1)),
                         ),
                       ],

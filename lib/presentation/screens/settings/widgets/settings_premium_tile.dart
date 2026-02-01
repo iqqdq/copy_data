@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:local_file_transfer/core/core.dart';
+
+import '../../../../core/core.dart';
 
 class SettingsPremiumTile extends StatefulWidget {
   final VoidCallback onPressed;
