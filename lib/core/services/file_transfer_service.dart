@@ -6,21 +6,19 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
-import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
-import 'package:ffmpeg_kit_flutter_new/return_code.dart';
-import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../app.dart';
+import '../core.dart';
 
 class FileTransferService extends ChangeNotifier {
+  final VideoConverterService _videoConverter = VideoConverterService();
+  final GallerySaverService _gallerySaver = GallerySaverService();
+  final MediaManagerService _mediaManager = MediaManagerService();
+
   static const int CHUNK_SIZE = 32 * 1024; // 32KB
   static const int PORT = 8080;
 
@@ -40,28 +38,23 @@ class FileTransferService extends ChangeNotifier {
   String? _connectedServerName;
 
   final Map<String, FileReceiver> _fileReceivers = {};
-  final String _receivedFilesDir = 'ReceivedFiles';
-  Directory? _appDocumentsDirectory;
 
-  bool _isProgressListenerActive = false;
   bool _shouldShowSubscriptionDialog = false;
 
   // Getters
   bool get isServerRunning => _isServerRunning;
 
   String get localIp => _localIp;
-  String get status => _status;
+  String get status => _status; // TODO: DELETE?
   String? get connectedServerIp => _connectedServerIp;
   String? get connectedServerName => _connectedServerName;
   bool get isConnected => _clientChannel != null;
 
   Map<String, FileTransfer> get activeTransfers => Map.from(_activeTransfers);
 
-  List<ReceivedMedia> get receivedMedia => _receivedMedia;
-  bool get shouldShowSubscriptionDialog => _shouldShowSubscriptionDialog;
+  List<ReceivedMedia> get receivedMedia => _mediaManager.receivedMedia;
 
-  // Список полученных медиафайлов
-  final List<ReceivedMedia> _receivedMedia = [];
+  bool get shouldShowSubscriptionDialog => _shouldShowSubscriptionDialog;
 
   // Колбэк для уведомления UI об отсутствии подписки
   VoidCallback? _onSubscriptionRequired;
@@ -82,61 +75,29 @@ class FileTransferService extends ChangeNotifier {
   }
 
   FileTransferService() {
-    _initialize();
+    _initialize(); // TODO: DELETE?
   }
 
-  Future<void> _initialize() async {
-    await _initializeDirectories();
-    _loadReceivedMedia();
-  }
+  Future<void> _initialize() async {} // TODO: DELETE?
 
-  Future<void> _initializeDirectories() async {
-    _appDocumentsDirectory = await getApplicationDocumentsDirectory();
-    final receivedDir = Directory(
-      path.join(_appDocumentsDirectory!.path, _receivedFilesDir),
-    );
-    if (!await receivedDir.exists()) {
-      await receivedDir.create(recursive: true);
+  @override
+  void dispose() {
+    // Закрываем все активные файловые потоки
+    for (final receiver in _fileReceivers.values) {
+      receiver.close();
     }
-  }
+    _fileReceivers.clear();
 
-  Future<void> _loadReceivedMedia() async {
-    try {
-      final mediaDir = Directory(
-        path.join(_appDocumentsDirectory!.path, _receivedFilesDir),
-      );
+    // Очищаем активные передачи
+    _activeTransfers.clear();
 
-      if (await mediaDir.exists()) {
-        final files = await mediaDir.list().toList();
-        _receivedMedia.clear();
+    // Освобождаем ресурсы сервисов
+    _videoConverter.dispose();
+    _mediaManager.dispose();
 
-        for (final file in files) {
-          if (file is File) {
-            final stat = await file.stat();
-            final mimeType =
-                lookupMimeType(file.path) ?? 'application/octet-stream';
-
-            if (mimeType.startsWith('image/') ||
-                mimeType.startsWith('video/')) {
-              _receivedMedia.add(
-                ReceivedMedia(
-                  file: file,
-                  fileName: path.basename(file.path),
-                  fileSize: stat.size,
-                  mimeType: mimeType,
-                  receivedAt: stat.modified,
-                ),
-              );
-            }
-          }
-        }
-
-        _receivedMedia.sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
-        notifyListeners();
-      }
-    } catch (e) {
-      print('❌ Ошибка загрузки списка медиа: $e');
-    }
+    stopServer();
+    disconnect();
+    super.dispose();
   }
 
   // =========== СЕРВЕРНЫЕ МЕТОДЫ ===========
@@ -750,7 +711,9 @@ class FileTransferService extends ChangeNotifier {
       final conversionWeight = isVideoGroup ? 40.0 : 0.0;
       final transferWeight = isVideoGroup ? 60.0 : 100.0;
 
-      if (isVideoGroup && mimeType.startsWith('video/') && _isMovFile(file)) {
+      if (isVideoGroup &&
+          mimeType.startsWith('video/') &&
+          _videoConverter.isMovFile(file)) {
         print('🎬 Конвертация .mov в .mp4 на сервере...');
 
         final fileTransferId = '${groupTransferId}_$i';
@@ -786,7 +749,7 @@ class FileTransferService extends ChangeNotifier {
           totalGroupSize,
         );
 
-        final convertedFile = await _convertMovToMp4(file, (
+        final convertedFile = await _videoConverter.convertMovToMp4(file, (
           conversionProgress,
         ) {
           // Проверяем отмену во время конвертации
@@ -1376,12 +1339,11 @@ class FileTransferService extends ChangeNotifier {
       // Создаем временный файл для приема
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final safeFileName = fileName.replaceAll(RegExp(r'[^\w\s.-]'), '_');
+      final mediaDirPath = await _mediaManager.getMediaDirectoryPath();
       final tempPath = path.join(
-        _appDocumentsDirectory!.path,
-        _receivedFilesDir,
+        mediaDirPath,
         'from_server_${timestamp}_$safeFileName',
       );
-
       // Проверяем, существует ли уже групповая передача
       FileTransfer? groupTransfer;
       if (isGroupFile && _activeTransfers.containsKey(groupTransferId)) {
@@ -1444,15 +1406,12 @@ class FileTransferService extends ChangeNotifier {
             print('✅ Одиночный файл завершен: $fileName');
           }
 
-          final media = ReceivedMedia(
+          await _mediaManager.addMedia(
             file: file,
             fileName: fileName,
-            fileSize: fileSize,
             mimeType: fileType,
             receivedAt: DateTime.now(),
           );
-          _receivedMedia.insert(0, media);
-          notifyListeners();
         },
         onError: (error) {
           print('❌ Ошибка приема файла $fileName: $error');
@@ -1697,305 +1656,9 @@ class FileTransferService extends ChangeNotifier {
     return 'Устройство';
   }
 
-  // =========== КОНВЕРТАЦИЯ ВИДЕО ===========
+  // MARK: КОНВЕРТАЦИЯ ВИДЕО
 
-  bool _isMovFile(File file) {
-    final fileName = path.basename(file.path).toLowerCase();
-    return fileName.endsWith('.mov') || fileName.endsWith('.quicktime');
-  }
-
-  Future<File?> _convertMovToMp4(
-    File file,
-    Function(double) onProgress, {
-    Completer<void>? cancelCompleter,
-  }) async {
-    final localCancelCompleter = cancelCompleter ?? Completer<void>();
-    bool isCancelled = false;
-
-    // Подписываемся на отмену
-    localCancelCompleter.future.then((_) {
-      isCancelled = true;
-      print('🛑 Получен сигнал отмены конвертации');
-    });
-
-    try {
-      print('🎬 Конвертация HEVC (iPhone) в H.264 (Android)...');
-
-      if (!await file.exists()) {
-        print('❌ Файл не найден');
-        onProgress(100.0);
-        return null;
-      }
-
-      final fileSize = await file.length();
-      print('📊 Размер: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
-
-      final duration = await _getVideoDuration(file);
-      if (duration == null) {
-        print('⚠️ Не удалось получить длительность видео');
-        onProgress(100.0);
-        return null;
-      }
-
-      print('⏱️ Длительность видео: $duration секунд');
-      onProgress(0.0);
-
-      final tempDir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final outputPath = path.join(
-        tempDir.path,
-        'android_compatible_$timestamp.mp4',
-      );
-
-      print('📁 Выходной файл: $outputPath');
-
-      final conversionCommand =
-          '''
-      -i "${file.path}"
-      -c:v libx264
-      -preset faster
-      -crf 24
-      -profile:v high
-      -level 4.2
-      -pix_fmt yuv420p
-      -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
-      -movflags +faststart
-      -c:a aac
-      -b:a 128k
-      -ac 2
-      -ar 44100
-      -y "$outputPath"
-    '''
-              .replaceAll(RegExp(r'\s+'), ' ');
-
-      print('🚀 Команда конвертации: $conversionCommand');
-
-      final completer = Completer<File?>();
-      double lastSentProgress = -1.0;
-
-      // Храним ссылку на сессию для возможной отмены
-
-      // Включаем слушатель прогресса
-      _setupFfmpegProgressListener((progress) {
-        if (isCancelled) return;
-
-        if (progress - lastSentProgress >= 1.0 || progress >= 100.0) {
-          onProgress(progress);
-          lastSentProgress = progress;
-        }
-      }, duration);
-
-      // Запускаем FFmpeg асинхронно с возможностью отслеживания
-      FFmpegKit.executeAsync(conversionCommand, (session) async {
-        // Проверяем отмену сразу после получения сессии
-        if (isCancelled) {
-          print('🛑 Конвертация отменена перед началом');
-          await _tryCancelFfmpegSession(session);
-          completer.complete(null);
-          return;
-        }
-
-        final returnCode = await session.getReturnCode();
-
-        // Отключаем слушатель
-        _disableFfmpegProgressListener();
-
-        // Проверяем отмену
-        if (isCancelled) {
-          print('🛑 Конвертация отменена пользователем во время выполнения');
-          // Удаляем временный файл если создан
-          final tempFile = File(outputPath);
-          if (await tempFile.exists()) {
-            await tempFile.delete();
-          }
-          completer.complete(null);
-          return;
-        }
-
-        if (ReturnCode.isSuccess(returnCode)) {
-          final outputFile = File(outputPath);
-
-          if (await outputFile.exists()) {
-            final convertedSize = await outputFile.length();
-
-            print('✅ Конвертация успешна!');
-            print(
-              '📊 Новый размер: ${(convertedSize / 1024 / 1024).toStringAsFixed(2)} MB',
-            );
-
-            onProgress(100.0);
-            completer.complete(outputFile);
-          } else {
-            onProgress(100.0);
-            completer.complete(null);
-          }
-        } else {
-          final output = await session.getOutput();
-          print('❌ Конвертация не удалась: $output');
-          onProgress(100.0);
-          completer.complete(null);
-        }
-      });
-
-      // Ожидаем завершения или отмены
-      return await completer.future.timeout(
-        Duration(minutes: 10),
-        onTimeout: () {
-          if (!isCancelled) {
-            print('⏱️ Конвертация превысила лимит времени');
-            onProgress(100.0);
-          }
-          return null;
-        },
-      );
-    } catch (e, stackTrace) {
-      _disableFfmpegProgressListener();
-      print('💥 Ошибка при конвертации: $e');
-      print('Stack: $stackTrace');
-      onProgress(100.0);
-      return null;
-    }
-  }
-
-  Future<void> _tryCancelFfmpegSession(FFmpegSession session) async {
-    try {
-      // Попытка отменить выполнение FFmpeg
-      // Обратите внимание: FFmpegKit может не поддерживать отмену напрямую
-      // Это зависит от версии библиотеки
-      print('🛑 Пытаюсь отменить выполнение FFmpeg...');
-
-      // Альтернативный подход: отправляем SIGTERM если поддерживается
-      // или просто игнорируем результат
-      await session.cancel();
-
-      // Ждем немного для завершения
-      await Future.delayed(Duration(milliseconds: 500));
-    } catch (e) {
-      print('⚠️ Не удалось отменить FFmpeg сессию: $e');
-    }
-  }
-
-  void _setupFfmpegProgressListener(
-    Function(double) onProgress,
-    double totalDuration,
-  ) {
-    if (_isProgressListenerActive) return;
-
-    _isProgressListenerActive = true;
-
-    print('🎯 Включаю слушатель прогресса FFmpeg');
-
-    // Включаем callback для логов FFmpeg
-    FFmpegKitConfig.enableLogCallback((log) {
-      if (!_isProgressListenerActive) return;
-
-      final message = log.getMessage();
-
-      // Парсим прогресс из сообщений FFmpeg
-      if (message.contains('time=')) {
-        final progress = _parseProgressFromFfmpegOutput(message, totalDuration);
-        if (progress != null && progress >= 0 && progress <= 100) {
-          onProgress(progress);
-        }
-      }
-    });
-  }
-
-  void _disableFfmpegProgressListener() {
-    if (!_isProgressListenerActive) return;
-
-    print('🎯 Отключаю слушатель прогресса FFmpeg');
-    _isProgressListenerActive = false;
-
-    // Отключаем callback
-    FFmpegKitConfig.enableLogCallback(null);
-  }
-
-  double? _parseProgressFromFfmpegOutput(String output, double totalDuration) {
-    try {
-      // Ищем время в формате time=00:00:09.38
-      final timeMatch = RegExp(
-        r'time=(\d{2}):(\d{2}):(\d{2}\.\d{2})',
-      ).firstMatch(output);
-      if (timeMatch != null) {
-        final hours = int.parse(timeMatch.group(1)!);
-        final minutes = int.parse(timeMatch.group(2)!);
-        final seconds = double.parse(timeMatch.group(3)!);
-        final currentTime = hours * 3600 + minutes * 60 + seconds;
-
-        if (totalDuration > 0) {
-          final progress = (currentTime / totalDuration) * 100.0;
-          return progress;
-        }
-      }
-
-      // Альтернативный формат: frame=  543 fps= 42 q=32.0 size=    5632kB time=00:00:09.38
-      final altMatch = RegExp(
-        r'time=(\d+):(\d+):(\d+\.\d+)',
-      ).firstMatch(output);
-      if (altMatch != null) {
-        final hours = int.parse(altMatch.group(1)!);
-        final minutes = int.parse(altMatch.group(2)!);
-        final seconds = double.parse(altMatch.group(3)!);
-        final currentTime = hours * 3600 + minutes * 60 + seconds;
-
-        if (totalDuration > 0) {
-          final progress = (currentTime / totalDuration) * 100.0;
-          return progress;
-        }
-      }
-
-      return null;
-    } catch (e) {
-      print('⚠️ Ошибка парсинга времени FFmpeg: $e');
-      return null;
-    }
-  }
-
-  Future<double?> _getVideoDuration(File videoFile) async {
-    try {
-      // Пробуем через FFprobe
-      final command =
-          '-i "${videoFile.path}" -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1';
-      final session = await FFprobeKit.execute(command);
-      final returnCode = await session.getReturnCode();
-
-      if (ReturnCode.isSuccess(returnCode)) {
-        final output = await session.getOutput();
-        if (output != null && output.trim().isNotEmpty) {
-          final durationStr = output.trim();
-          final duration = double.tryParse(durationStr);
-          if (duration != null) {
-            return duration;
-          }
-        }
-      }
-
-      // Альтернативный способ через FFmpeg
-      final ffmpegCommand = '-i "${videoFile.path}" 2>&1 | grep Duration';
-      final ffmpegSession = await FFmpegKit.execute(ffmpegCommand);
-      final ffmpegOutput = await ffmpegSession.getOutput();
-
-      if (ffmpegOutput != null) {
-        final durationMatch = RegExp(
-          r'Duration:\s+(\d+):(\d+):(\d+\.\d+)',
-        ).firstMatch(ffmpegOutput);
-        if (durationMatch != null) {
-          final hours = int.parse(durationMatch.group(1)!);
-          final minutes = int.parse(durationMatch.group(2)!);
-          final seconds = double.parse(durationMatch.group(3)!);
-          return hours * 3600 + minutes * 60 + seconds;
-        }
-      }
-
-      return null;
-    } catch (e) {
-      print('⚠️ Не удалось получить длительность видео: $e');
-      return null;
-    }
-  }
-
-  // =========== СОХРАНЕНИЕ ФАЙЛОВ ===========
+  // MARK: СОХРАНЕНИЕ ФАЙЛОВ
 
   Future<void> _saveToGallery(
     File file,
@@ -2003,153 +1666,22 @@ class FileTransferService extends ChangeNotifier {
     String originalName,
   ) async {
     try {
-      print('💾 Сохранение в галерею: ${file.path}');
-      print('📝 Имя файла: $originalName');
+      final result = await _gallerySaver.saveToGallery(
+        file: file,
+        mimeType: mimeType,
+        originalName: originalName,
+      );
 
-      bool isSaved = false;
-      String? savedPath;
-
-      if (mimeType.startsWith('image/')) {
-        try {
-          final bytes = await file.readAsBytes();
-          print('🖼️ Размер изображения: ${bytes.length} байт');
-
-          if (Platform.isIOS) {
-            // Для iOS используем правильный путь
-            final result = await ImageGallerySaverPlus.saveImage(
-              bytes,
-              name: originalName,
-              quality: 100,
-              isReturnImagePathOfIOS: true,
-            );
-
-            print('📱 Результат сохранения на iOS: $result');
-
-            if (result is Map) {
-              final success = result['isSuccess'] as bool? ?? false;
-              final filePath = result['filePath'] as String?;
-              if (success) {
-                isSaved = true;
-                savedPath = filePath;
-                print('✅ Изображение сохранено в галерею iOS: $originalName');
-                if (filePath != null) {
-                  print('📁 Путь: $filePath');
-                }
-              } else {
-                print('❌ Ошибка при сохранении изображения на iOS');
-              }
-            } else if (result is bool) {
-              isSaved = result;
-              if (isSaved) {
-                print(
-                  '✅ Изображение сохранено в галерею Android: $originalName',
-                );
-              } else {
-                print('❌ Ошибка при сохранении изображения на Android');
-              }
-            }
-          } else {
-            // Для Android
-            final result = await ImageGallerySaverPlus.saveImage(
-              bytes,
-              name: originalName,
-              quality: 100,
-            );
-
-            print('📱 Результат сохранения на Android: $result');
-
-            if (result is Map) {
-              final success = result['isSuccess'] as bool? ?? false;
-              if (success) {
-                isSaved = true;
-                print(
-                  '✅ Изображение сохранено в галерею Android: $originalName',
-                );
-              }
-            } else if (result is bool) {
-              isSaved = result;
-              if (isSaved) {
-                print(
-                  '✅ Изображение сохранено в галерею Android: $originalName',
-                );
-              }
-            }
-          }
-        } catch (e) {
-          print('❌ Ошибка при сохранении изображения: $e');
-        }
-      } else if (mimeType.startsWith('video/')) {
-        try {
-          print('🎥 Размер видео файла: ${await file.length()} байт');
-
-          if (Platform.isIOS) {
-            // Для iOS видео
-            final result = await ImageGallerySaverPlus.saveFile(
-              file.path,
-              name: originalName,
-              isReturnPathOfIOS: true,
-            );
-
-            print('📱 Результат сохранения видео на iOS: $result');
-
-            if (result is Map) {
-              final success = result['isSuccess'] as bool? ?? false;
-              final filePath = result['filePath'] as String?;
-              if (success) {
-                isSaved = true;
-                savedPath = filePath;
-                print('✅ Видео сохранено в галерею iOS: $originalName');
-                if (filePath != null) {
-                  print('📁 Путь: $filePath');
-                }
-              } else {
-                print('❌ Ошибка при сохранении видео на iOS');
-              }
-            }
-          } else {
-            // Для Android видео
-            final result = await ImageGallerySaverPlus.saveFile(
-              file.path,
-              name: originalName,
-            );
-
-            print('📱 Результат сохранения видео на Android: $result');
-
-            if (result is Map) {
-              final success = result['isSuccess'] as bool? ?? false;
-              if (success) {
-                isSaved = true;
-                print('✅ Видео сохранено в галерею Android: $originalName');
-              }
-            }
-          }
-        } catch (e) {
-          print('❌ Ошибка при сохранении видео: $e');
-        }
-      }
-
-      if (isSaved) {
+      if (result.isSaved) {
         _status = 'Файл сохранен в галерею';
-        final length = await file.length();
+        final length = result.fileSize ?? await file.length();
 
-        // Обновляем путь в ReceivedMedia, если файл был сохранен в галерею
-        if (savedPath != null && savedPath.isNotEmpty) {
-          final media = _receivedMedia.firstWhere(
-            (m) => m.fileName == originalName,
-            orElse: () => ReceivedMedia(
-              file: file,
-              fileName: originalName,
-              fileSize: length,
-              mimeType: mimeType,
-              receivedAt: DateTime.now(),
-            ),
+        // Обновляем путь в MediaManager, если файл был сохранен в галерею
+        if (result.savedPath != null && result.savedPath!.isNotEmpty) {
+          await _mediaManager.updateMediaFile(
+            originalName,
+            File(result.savedPath!),
           );
-
-          if (media.file.path != savedPath) {
-            print('🔄 Обновляю путь к файлу: $savedPath');
-            // Обновляем файл на новый путь
-            media.file = File(savedPath);
-          }
         }
 
         // Удаляем временный файл после успешного сохранения
@@ -2167,36 +1699,15 @@ class FileTransferService extends ChangeNotifier {
 
         // Перемещаем файл из временной директории в постоянную
         try {
-          final permanentDir = Directory(
-            path.join(_appDocumentsDirectory!.path, _receivedFilesDir),
+          final permanentFile = await _gallerySaver.moveToPermanentDirectory(
+            tempFile: file,
+            originalName: originalName,
+            appDocumentsDirectory: _mediaManager.appDocumentsDirectory!,
+            receivedFilesDir: _mediaManager.receivedFilesDir,
           );
 
-          if (!await permanentDir.exists()) {
-            await permanentDir.create(recursive: true);
-          }
-
-          final permanentPath = path.join(permanentDir.path, originalName);
-
-          await file.copy(permanentPath);
-          await file.delete();
-
-          print('📁 Файл перемещен в постоянную директорию: $permanentPath');
-
-          final fileSize = await File(permanentPath).length();
-
-          // Обновляем путь в ReceivedMedia
-          final media = _receivedMedia.firstWhere(
-            (m) => m.fileName == originalName,
-            orElse: () => ReceivedMedia(
-              file: File(permanentPath),
-              fileName: originalName,
-              fileSize: fileSize,
-              mimeType: mimeType,
-              receivedAt: DateTime.now(),
-            ),
-          );
-
-          media.file = File(permanentPath);
+          // Обновляем файл в MediaManager
+          await _mediaManager.updateMediaFile(originalName, permanentFile);
         } catch (e) {
           print('⚠️ Ошибка перемещения файла: $e');
         }
@@ -2204,14 +1715,14 @@ class FileTransferService extends ChangeNotifier {
 
       notifyListeners();
     } catch (e, stackTrace) {
-      print('❌ Критическая ошибка сохранения в галерею: $e');
+      print('❌ Ошибка сохранения файла: $e');
       print('Stack: $stackTrace');
       _status = 'Ошибка сохранения: $e';
       notifyListeners();
     }
   }
 
-  // =========== УПРАВЛЕНИЕ ПОЛУЧЕННЫМИ МЕДИА ===========
+  // MARK: УПРАВЛЕНИЕ ПОЛУЧЕННЫМИ МЕДИА
 
   Future<void> openMediaInGallery(ReceivedMedia media) async {
     try {
@@ -2224,22 +1735,11 @@ class FileTransferService extends ChangeNotifier {
   }
 
   Future<bool> deleteMedia(ReceivedMedia media) async {
-    try {
-      if (await media.file.exists()) {
-        await media.file.delete();
-        _receivedMedia.remove(media);
-        notifyListeners();
-        return true;
-      }
-      return false;
-    } catch (e) {
-      print('❌ Ошибка удаления медиа: $e');
-      return false;
-    }
+    return await _mediaManager.deleteMedia(media);
   }
 
   Future<void> refreshReceivedMedia() async {
-    await _loadReceivedMedia();
+    await _mediaManager.refreshMedia();
   }
 
   // =========== ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ UI ===========
@@ -2269,19 +1769,6 @@ class FileTransferService extends ChangeNotifier {
   String getClientInfo(WebSocket client) {
     final index = _connectedClients.indexOf(client);
     return 'Клиент ${index + 1}';
-  }
-
-  @override
-  void dispose() {
-    // Закрываем все активные файловые потоки
-    for (final receiver in _fileReceivers.values) {
-      receiver.close();
-    }
-    _fileReceivers.clear();
-
-    stopServer();
-    disconnect();
-    super.dispose();
   }
 
   // Вспомогательный метод для форматирования байт
