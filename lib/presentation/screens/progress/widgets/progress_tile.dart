@@ -241,12 +241,12 @@ class ProgressTile extends StatelessWidget {
     if (showAsCompleted) {
       // Для завершенных показываем общий размер с акцентным цветом
       return Text(
-        FileUtils.formatBytes(totalSize, totalSize, showBoth: false),
+        FileUtils.calculateProgress(totalSize, totalSize, showBoth: false),
         style: AppTypography.link12Regular.copyWith(color: AppColors.accent),
       );
     } else {
       // Для незавершенных показываем прогресс с выделением
-      final fullText = FileUtils.formatBytes(
+      final fullText = FileUtils.calculateProgress(
         totalReceived,
         totalSize,
         showBoth: true,

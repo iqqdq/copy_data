@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../core.dart';
+import '../../core.dart';
 
 class FileTransferManager extends ChangeNotifier {
   final Map<String, FileTransfer> _activeTransfers = {};
@@ -83,7 +83,8 @@ class FileTransferManager extends ChangeNotifier {
     required bool notifyRemote,
     required Function(WebSocket socket, Map<String, dynamic> message)
     sendToClient,
-    required Function(Map<String, dynamic> message) sendClientMessage,
+    required Future<void> Function(Map<String, dynamic> message)
+    sendClientMessage,
     required List<WebSocket> connectedClients,
   }) async {
     try {
@@ -110,7 +111,7 @@ class FileTransferManager extends ChangeNotifier {
           }
         } else {
           // Клиент отменяет - отправляем серверу
-          sendClientMessage(cancelMessage);
+          await sendClientMessage(cancelMessage);
           print('📤 Отправлена отмена серверу: $transferId');
         }
       }

@@ -1,7 +1,32 @@
 class FileUtils {
   FileUtils._();
 
-  static String formatBytes(int bytes, int totalBytes, {bool showBoth = true}) {
+  static String formatBytes(int bytes, {bool forceSameUnit = false}) {
+    if (forceSameUnit) {
+      // Принудительно используем MB для всех значений > 1MB
+      if (bytes >= 1024 * 1024) {
+        return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+      }
+      // Для значений < 1MB используем KB
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    }
+
+    // Оригинальная логика
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
+  static String calculateProgress(
+    int bytes,
+    int totalBytes, {
+    bool showBoth = true,
+  }) {
     // Определяем единицу измерения на основе общего размера
     String unit;
     double bytesValue;

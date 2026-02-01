@@ -1,0 +1,620 @@
+// server_file_sender_service.dart
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:mime/mime.dart';
+import 'package:path/path.dart' as path;
+
+import '../../core.dart';
+
+class ServerFileSenderService {
+  final VideoConverterService _videoConverter;
+  final FileTransferManager _transferManager;
+
+  ServerFileSenderService({
+    required VideoConverterService videoConverter,
+    required FileTransferManager transferManager,
+  }) : _videoConverter = videoConverter,
+       _transferManager = transferManager;
+
+  // MARK: - ОТПРАВКА ФАЙЛОВ С СЕРВЕРА НА КЛИЕНТ
+
+  Future<void> sendFilesToClient(
+    List<File> files,
+    WebSocket client,
+    Function(WebSocket, Map<String, dynamic>) sendToClient,
+  ) async {
+    print('🚀 Сервер начинает отправку файлов клиенту');
+
+    // Очищаем старые передачи перед началом новых
+    _transferManager.clearAllTransfers();
+
+    // Создаем отдельные передачи для фото и видео
+    final photoFiles = files.where((file) {
+      final mimeType = lookupMimeType(file.path) ?? '';
+      return mimeType.startsWith('image/');
+    }).toList();
+
+    final videoFiles = files.where((file) {
+      final mimeType = lookupMimeType(file.path) ?? '';
+      return mimeType.startsWith('video/');
+    }).toList();
+
+    // Создаем передачи для фото
+    String? photoTransferId;
+    if (photoFiles.isNotEmpty) {
+      photoTransferId = await _createPhotoTransfer(
+        photoFiles,
+        client,
+        sendToClient,
+      );
+    }
+
+    // Создаем передачи для видео
+    String? videoTransferId;
+    if (videoFiles.isNotEmpty) {
+      videoTransferId = await _createVideoTransfer(
+        videoFiles,
+        client,
+        sendToClient,
+      );
+    }
+
+    // Отправляем файлы группами
+    if (photoFiles.isNotEmpty && photoTransferId != null) {
+      print('🚀 Начинаю отправку ${photoFiles.length} фото с сервера...');
+      await _sendFileGroup(
+        photoFiles,
+        client,
+        photoTransferId,
+        isVideoGroup: false,
+        sendToClient: sendToClient,
+      );
+    }
+
+    if (videoFiles.isNotEmpty && videoTransferId != null) {
+      print('🚀 Начинаю отправку ${videoFiles.length} видео с сервера...');
+      await _sendFileGroup(
+        videoFiles,
+        client,
+        videoTransferId,
+        isVideoGroup: true,
+        sendToClient: sendToClient,
+      );
+    }
+
+    print('🎯 Все групповые передачи запущены с сервера');
+  }
+
+  Future<String> _createPhotoTransfer(
+    List<File> photoFiles,
+    WebSocket client,
+    Function(WebSocket, Map<String, dynamic>) sendToClient,
+  ) async {
+    final photoTransferId = 'photos_${DateTime.now().millisecondsSinceEpoch}';
+    int totalPhotoSize = 0;
+
+    for (final file in photoFiles) {
+      try {
+        final length = await file.length();
+        totalPhotoSize += length;
+        print(
+          '📊 Фото ${path.basename(file.path)}: ${FileUtils.formatBytes(length)}',
+        );
+      } catch (e) {
+        print('⚠️ Ошибка получения размера фото: $e');
+      }
+    }
+
+    final photoTransfer = FileTransfer(
+      transferId: photoTransferId,
+      fileName: '${photoFiles.length} фото',
+      fileSize: totalPhotoSize,
+      fileType: 'image/mixed',
+      file: photoFiles.first,
+      targetPath: '',
+      onProgress: (progress) {
+        // UI будет обновляться через onProgress callback
+      },
+      onComplete: (file) {
+        print('✅ Все фото отправлены с сервера');
+      },
+      onError: (error) {
+        print('❌ Ошибка отправки фото: $error');
+        _transferManager.removeTransfer(photoTransferId);
+      },
+      sendMessage: (message) {
+        try {
+          sendToClient(client, message);
+        } catch (e) {
+          print('❌ Ошибка отправки сообщения клиенту: $e');
+        }
+      },
+      totalFiles: photoFiles.length,
+      completedFiles: 0,
+    );
+
+    _transferManager.addTransfer(photoTransfer);
+
+    print(
+      '📸 Создана групповая передача фото: ${photoFiles.length} файлов, '
+      'общий размер: ${(totalPhotoSize / (1024 * 1024)).toStringAsFixed(2)} MB',
+    );
+
+    return photoTransferId;
+  }
+
+  Future<String> _createVideoTransfer(
+    List<File> videoFiles,
+    WebSocket client,
+    Function(WebSocket, Map<String, dynamic>) sendToClient,
+  ) async {
+    final videoTransferId = 'videos_${DateTime.now().millisecondsSinceEpoch}';
+    int totalVideoSize = 0;
+
+    for (final file in videoFiles) {
+      try {
+        final length = await file.length();
+        totalVideoSize += length;
+        print(
+          '📊 Видео ${path.basename(file.path)}: ${FileUtils.formatBytes(length)}',
+        );
+      } catch (e) {
+        print('⚠️ Ошибка получения размера видео: $e');
+      }
+    }
+
+    final videoTransfer = FileTransfer(
+      transferId: videoTransferId,
+      fileName: '${videoFiles.length} видео',
+      fileSize: totalVideoSize,
+      fileType: 'video/mixed',
+      file: videoFiles.first,
+      targetPath: '',
+      onProgress: (progress) {
+        // UI будет обновляться через onProgress callback
+      },
+      onComplete: (file) {
+        print('✅ Все видео отправлены с сервера');
+      },
+      onError: (error) {
+        print('❌ Ошибка отправки видео: $error');
+        _transferManager.removeTransfer(videoTransferId);
+      },
+      sendMessage: (message) {
+        try {
+          sendToClient(client, message);
+        } catch (e) {
+          print('❌ Ошибка отправки сообщения клиенту: $e');
+        }
+      },
+      totalFiles: videoFiles.length,
+      completedFiles: 0,
+    );
+
+    _transferManager.addTransfer(videoTransfer);
+
+    print(
+      '🎥 Создана групповая передача видео: ${videoFiles.length} файлов, '
+      'общий размер: ${(totalVideoSize / (1024 * 1024)).toStringAsFixed(2)} MB',
+    );
+
+    // Отправляем метаданные видео группы немедленно
+    final videoGroupMetadata = {
+      'type': 'group_metadata',
+      'transferId': videoTransferId,
+      'fileName': '${videoFiles.length} видео',
+      'totalFiles': videoFiles.length,
+      'totalSize': totalVideoSize,
+      'fileType': 'video/mixed',
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+
+    sendToClient(client, videoGroupMetadata);
+    print('📤 Отправлены метаданные видео группы немедленно');
+
+    return videoTransferId;
+  }
+
+  Future<void> _sendFileGroup(
+    List<File> files,
+    WebSocket socket,
+    String groupTransferId, {
+    required bool isVideoGroup,
+    required Function(WebSocket, Map<String, dynamic>) sendToClient,
+  }) async {
+    final transfer = _transferManager.getTransfer(groupTransferId);
+    if (transfer == null) {
+      print('⚠️ Групповая передача $groupTransferId не найдена');
+      return;
+    }
+
+    bool isCancelled = false;
+
+    if (_transferManager.getTransfer(groupTransferId) == null) {
+      print('⚠️ Передача была отменена до начала отправки');
+      return;
+    }
+
+    // Отправляем метаданные группы
+    final groupMetadata = {
+      'type': 'group_metadata',
+      'transferId': groupTransferId,
+      'fileName': transfer.fileName,
+      'totalFiles': files.length,
+      'totalSize': transfer.fileSize,
+      'fileType': isVideoGroup ? 'video/mixed' : 'image/mixed',
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+
+    sendToClient(socket, groupMetadata);
+    await Future.delayed(Duration(milliseconds: 100));
+
+    int totalBytesSent = 0;
+    final int totalGroupSize = transfer.fileSize;
+
+    print(
+      '📊 Начинаю отправку группы с сервера: ${files.length} файлов, '
+      'общий размер: ${(totalGroupSize / (1024 * 1024)).toStringAsFixed(2)} MB',
+    );
+
+    // Начальный прогресс
+    transfer.updateProgress(0);
+
+    // Отправляем начальный прогресс клиенту
+    _sendProgressUpdate(
+      socket,
+      groupTransferId,
+      0.0,
+      0,
+      totalGroupSize,
+      sendToClient,
+    );
+
+    for (int i = 0; i < files.length; i++) {
+      if (_transferManager.getTransfer(groupTransferId) == null) {
+        print('⚠️ Передача отменена во время отправки файла ${i + 1}');
+        isCancelled = true;
+        break;
+      }
+
+      final file = files[i];
+      final fileName = path.basename(file.path);
+      final mimeType = lookupMimeType(file.path) ?? 'application/octet-stream';
+      final fileSize = await file.length();
+
+      File fileToSend = file;
+      String fileType = mimeType;
+
+      print(
+        '📦 ${isVideoGroup ? 'Видео' : 'Фото'} ${i + 1}/${files.length}: $fileName '
+        '(${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB)',
+      );
+
+      if (isCancelled ||
+          _transferManager.getTransfer(groupTransferId) == null) {
+        print('⚠️ Отмена во время подготовки файла ${i + 1}');
+        break;
+      }
+
+      final fileShare = fileSize.toDouble() / totalGroupSize.toDouble();
+      final progressBeforeThisFile =
+          (totalBytesSent.toDouble() / totalGroupSize.toDouble()) * 100.0;
+
+      final conversionWeight = isVideoGroup ? 40.0 : 0.0;
+      final transferWeight = isVideoGroup ? 60.0 : 100.0;
+
+      if (isVideoGroup &&
+          mimeType.startsWith('video/') &&
+          _videoConverter.isMovFile(file)) {
+        print('🎬 Конвертация .mov в .mp4 на сервере...');
+
+        final fileTransferId = '${groupTransferId}_$i';
+        final currentFileSize = fileSize;
+
+        final metadata = {
+          'type': 'file_metadata',
+          'transferId': fileTransferId,
+          'fileName': fileName,
+          'fileSize': currentFileSize,
+          'fileType': mimeType,
+          'timestamp': DateTime.now().toIso8601String(),
+          'isConverting': true,
+        };
+
+        socket.add(jsonEncode(metadata));
+        await Future.delayed(Duration(milliseconds: 100));
+
+        if (_transferManager.getTransfer(groupTransferId) == null) {
+          print('⚠️ Передача отменена перед конвертацией');
+          isCancelled = true;
+          break;
+        }
+
+        // Прогресс на начало конвертации
+        _sendProgressUpdate(
+          socket,
+          groupTransferId,
+          progressBeforeThisFile,
+          totalBytesSent,
+          totalGroupSize,
+          sendToClient,
+        );
+
+        final convertedFile = await _videoConverter.convertMovToMp4(file, (
+          conversionProgress,
+        ) {
+          if (_transferManager.getTransfer(groupTransferId) == null) {
+            print('⚠️ Передача отменена во время конвертации');
+            isCancelled = true;
+            return;
+          }
+
+          final conversionShareInGroup =
+              (conversionProgress / 100.0) *
+              conversionWeight *
+              fileShare /
+              100.0;
+
+          final groupProgress =
+              progressBeforeThisFile + (conversionShareInGroup * 100.0);
+
+          final clampedProgress = groupProgress.clamp(0.0, 100.0);
+
+          final bytesForProgress = (clampedProgress / 100.0 * totalGroupSize)
+              .toInt();
+          transfer.updateProgress(bytesForProgress);
+
+          _sendProgressUpdate(
+            socket,
+            groupTransferId,
+            clampedProgress,
+            transfer.receivedBytes,
+            totalGroupSize,
+            sendToClient,
+          );
+
+          print(
+            '🔄 Прогресс видео ${i + 1}: конвертация ${conversionProgress.toStringAsFixed(1)}%, '
+            'общий прогресс: ${clampedProgress.toStringAsFixed(1)}%',
+          );
+        });
+
+        if (convertedFile != null) {
+          fileToSend = convertedFile;
+          fileType = 'video/mp4';
+        }
+
+        if (_transferManager.getTransfer(groupTransferId) == null) {
+          print('⚠️ Передача отменена после конвертации');
+          isCancelled = true;
+          break;
+        }
+      } else {
+        _sendProgressUpdate(
+          socket,
+          groupTransferId,
+          progressBeforeThisFile,
+          totalBytesSent,
+          totalGroupSize,
+          sendToClient,
+        );
+      }
+
+      if (isCancelled ||
+          _transferManager.getTransfer(groupTransferId) == null) {
+        print('⚠️ Отмена перед началом передачи файла');
+        break;
+      }
+
+      final progressBeforeTransfer =
+          progressBeforeThisFile + (conversionWeight * fileShare);
+      final clampedProgressBeforeTransfer = progressBeforeTransfer.clamp(
+        0.0,
+        100.0,
+      );
+
+      final bytesBeforeTransfer =
+          (clampedProgressBeforeTransfer / 100.0 * totalGroupSize).toInt();
+      transfer.updateProgress(bytesBeforeTransfer);
+
+      _sendProgressUpdate(
+        socket,
+        groupTransferId,
+        clampedProgressBeforeTransfer,
+        transfer.receivedBytes,
+        totalGroupSize,
+        sendToClient,
+      );
+
+      // Отправка текущего файла
+      print(
+        '📤 Отправка ${isVideoGroup ? 'видео' : 'фото'} ${i + 1}/${files.length} с сервера',
+      );
+
+      final fileTransferId = '${groupTransferId}_$i';
+      final currentFileSize = await fileToSend.length();
+
+      final metadata = {
+        'type': 'file_metadata',
+        'transferId': fileTransferId,
+        'fileName': fileName,
+        'fileSize': currentFileSize,
+        'fileType': fileType,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      socket.add(jsonEncode(metadata));
+      await Future.delayed(Duration(milliseconds: 50));
+
+      // Открываем поток с проверкой отмены
+      final stream = fileToSend.openRead();
+      var chunkIndex = 0;
+      var fileSentBytes = 0;
+
+      try {
+        await for (final chunk in stream) {
+          if (_transferManager.getTransfer(groupTransferId) == null) {
+            print('⚠️ Передача отменена во время отправки чанка $chunkIndex');
+            isCancelled = true;
+            break;
+          }
+
+          final chunkMessage = {
+            'type': 'file_chunk',
+            'transferId': fileTransferId,
+            'chunkIndex': chunkIndex,
+            'chunkData': base64Encode(chunk),
+            'isLast': false,
+            'timestamp': DateTime.now().toIso8601String(),
+          };
+
+          socket.add(jsonEncode(chunkMessage));
+          fileSentBytes += chunk.length;
+          chunkIndex++;
+
+          final fileTransferProgress =
+              fileSentBytes.toDouble() / currentFileSize.toDouble();
+
+          final transferShareInGroup =
+              fileTransferProgress * transferWeight * fileShare / 100.0;
+
+          final groupProgress =
+              progressBeforeTransfer + (transferShareInGroup * 100.0);
+
+          final clampedGroupProgress = groupProgress.clamp(0.0, 100.0);
+
+          final bytesForGroupProgress =
+              (clampedGroupProgress / 100.0 * totalGroupSize).toInt();
+          transfer.updateProgress(bytesForGroupProgress);
+
+          if (chunkIndex % 2 == 0 || fileSentBytes == currentFileSize) {
+            _sendProgressUpdate(
+              socket,
+              groupTransferId,
+              clampedGroupProgress,
+              transfer.receivedBytes,
+              totalGroupSize,
+              sendToClient,
+            );
+          }
+        }
+      } catch (e) {
+        if (!isCancelled) {
+          print('❌ Ошибка во время отправки файла: $e');
+          transfer.onError(e.toString());
+          break;
+        }
+      }
+
+      if (isCancelled ||
+          _transferManager.getTransfer(groupTransferId) == null) {
+        print('⚠️ Передача отменена, прекращаем отправку файлов');
+        break;
+      }
+
+      // Финальное сообщение для файла
+      final finalMessage = {
+        'type': 'file_chunk',
+        'transferId': fileTransferId,
+        'chunkIndex': chunkIndex,
+        'chunkData': '',
+        'isLast': true,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      socket.add(jsonEncode(finalMessage));
+
+      totalBytesSent += fileSize;
+
+      final exactGroupProgress =
+          (totalBytesSent.toDouble() / totalGroupSize.toDouble()) * 100.0;
+      final clampedExactProgress = exactGroupProgress.clamp(0.0, 100.0);
+
+      final bytesForExactProgress =
+          (clampedExactProgress / 100.0 * totalGroupSize).toInt();
+      transfer.updateProgress(bytesForExactProgress);
+
+      _sendProgressUpdate(
+        socket,
+        groupTransferId,
+        clampedExactProgress,
+        transfer.receivedBytes,
+        totalGroupSize,
+        sendToClient,
+      );
+
+      transfer.completedFiles++;
+
+      print(
+        '✅ ${isVideoGroup ? 'Видео' : 'Фото'} ${i + 1}/${files.length} отправлено с сервера '
+        '(${transfer.completedFiles}/${transfer.totalFiles} файлов, '
+        '${clampedExactProgress.toStringAsFixed(1)}%)',
+      );
+
+      // Удаляем временный файл
+      if (fileToSend.path != file.path && await fileToSend.exists()) {
+        try {
+          await fileToSend.delete();
+          print('🗑️ Удален временный конвертированный файл');
+        } catch (e) {
+          print('⚠️ Не удалось удалить временный файл: $e');
+        }
+      }
+
+      if (_transferManager.getTransfer(groupTransferId) == null) {
+        print('⚠️ Передача отменена после завершения файла');
+        isCancelled = true;
+        break;
+      }
+    }
+
+    if (isCancelled) {
+      print('🛑 Отправка отменена пользователем');
+      transfer.onError('Передача отменена');
+    } else {
+      // Завершаем прогресс группы - ТОЧНО 100%
+      transfer.updateProgress(totalGroupSize);
+
+      _sendProgressUpdate(
+        socket,
+        groupTransferId,
+        100.0,
+        totalGroupSize,
+        totalGroupSize,
+        sendToClient,
+      );
+      transfer.onComplete(files.first);
+
+      print(
+        '🎉 Все ${files.length} ${isVideoGroup ? 'видео' : 'фото'} отправлены с сервера! '
+        '(100%, ${transfer.completedFiles}/${transfer.totalFiles} файлов)',
+      );
+    }
+  }
+
+  void _sendProgressUpdate(
+    WebSocket socket,
+    String transferId,
+    double progress,
+    int receivedBytes,
+    int totalBytes,
+    Function(WebSocket, Map<String, dynamic>) sendToClient,
+  ) {
+    try {
+      final progressMessage = {
+        'type': 'progress_update',
+        'transferId': transferId,
+        'progress': progress.clamp(0.0, 100.0),
+        'receivedBytes': receivedBytes,
+        'totalBytes': totalBytes,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      sendToClient(socket, progressMessage);
+    } catch (e) {
+      print('❌ Ошибка отправки прогресса клиенту: $e');
+    }
+  }
+}

@@ -6,7 +6,7 @@ import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
-import '../core.dart';
+import '../../core.dart';
 
 class MediaManagerService extends ChangeNotifier {
   final List<ReceivedMedia> _receivedMedia = [];
