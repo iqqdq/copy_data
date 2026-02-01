@@ -15,6 +15,7 @@ import '../../app.dart';
 import '../core.dart';
 
 class FileTransferService extends ChangeNotifier {
+  final WebSocketServerService _webSocketServer = WebSocketServerService();
   final VideoConverterService _videoConverter = VideoConverterService();
   final GallerySaverService _gallerySaver = GallerySaverService();
   final MediaManagerService _mediaManager = MediaManagerService();
@@ -23,14 +24,8 @@ class FileTransferService extends ChangeNotifier {
   static const int PORT = 8080;
 
   // Состояние
-  bool _isServerRunning = false;
-  String _localIp = '';
   final Map<String, FileTransfer> _activeTransfers = {};
   String _status = 'Готов';
-
-  // WebSocket сервер
-  HttpServer? _httpServer;
-  final List<WebSocket> _connectedClients = [];
 
   // WebSocket клиент
   WebSocketChannel? _clientChannel;
@@ -42,9 +37,10 @@ class FileTransferService extends ChangeNotifier {
   bool _shouldShowSubscriptionDialog = false;
 
   // Getters
-  bool get isServerRunning => _isServerRunning;
+  bool get isServerRunning => _webSocketServer.isServerRunning;
+  String get localIp => _webSocketServer.localIp;
+  List<WebSocket> get connectedClients => _webSocketServer.connectedClients;
 
-  String get localIp => _localIp;
   String get status => _status; // TODO: DELETE?
   String? get connectedServerIp => _connectedServerIp;
   String? get connectedServerName => _connectedServerName;
@@ -92,6 +88,7 @@ class FileTransferService extends ChangeNotifier {
     _activeTransfers.clear();
 
     // Освобождаем ресурсы сервисов
+    _webSocketServer.dispose();
     _videoConverter.dispose();
     _mediaManager.dispose();
 
@@ -100,134 +97,59 @@ class FileTransferService extends ChangeNotifier {
     super.dispose();
   }
 
-  // =========== СЕРВЕРНЫЕ МЕТОДЫ ===========
+  // MARK: - СЕРВЕРНЫЕ МЕТОДЫ
 
   Future<void> startServer() async {
     try {
       _status = 'Запуск сервера...';
       notifyListeners();
 
-      _localIp = await _getLocalIp();
-      print('📱 IP адрес сервера: $_localIp');
+      // Настраиваем обработчики сообщений
+      _webSocketServer.setMessageHandler(_handleServerMessage);
+      _webSocketServer.setClientConnectedHandler((client) {
+        notifyListeners();
+      });
+      _webSocketServer.setClientDisconnectedHandler((client) {
+        notifyListeners();
+      });
 
-      bool serverStarted = false;
+      await _webSocketServer.startServer();
 
-      for (var port in [PORT, 8081, 8082, 8083, 8084]) {
-        try {
-          print('🔄 Пробую запустить на порту $port...');
-
-          _httpServer = await HttpServer.bind(
-            InternetAddress.anyIPv4,
-            port,
-            shared: true,
-          );
-
-          print('✅ HTTP сервер запущен на порту $port');
-
-          _httpServer!.listen(_handleWebSocket);
-
-          serverStarted = true;
-
-          _isServerRunning = true;
-          _status = 'Сервер запущен ✅\nIP: $_localIp\nПорт: $port';
-
-          print('🎉 WEB SOCKET сервер запущен!');
-          print('Подключитесь: ws://$_localIp:$port');
-
-          notifyListeners();
-          break;
-        } catch (e) {
-          print('❌ Порт $port занят: $e');
-
-          if (_httpServer != null) {
-            await _httpServer!.close();
-            _httpServer = null;
-          }
-
-          await Future.delayed(Duration(milliseconds: 100));
-        }
-      }
-
-      if (!serverStarted) {
-        throw Exception('Не удалось запустить сервер ни на одном порту');
-      }
+      _status = 'Сервер запущен ✅\nIP: ${_webSocketServer.localIp}';
+      notifyListeners();
     } catch (e, stackTrace) {
       print('💥 ОШИБКА ЗАПУСКА СЕРВЕРА: $e');
       print('Stack: $stackTrace');
 
       _status = 'Ошибка: $e';
-      _isServerRunning = false;
       notifyListeners();
+      rethrow;
     }
   }
 
-  void _handleWebSocket(HttpRequest request) async {
-    try {
-      print('🔗 Входящее подключение: ${request.uri}');
+  void _handleServerMessage(WebSocket socket, Map<String, dynamic> data) {
+    final type = data['type'] as String?;
+    if (type == null) return;
 
-      if (request.uri.path == '/ws') {
-        final webSocket = await WebSocketTransformer.upgrade(request);
-        print('✅ WebSocket клиент подключен');
-
-        _connectedClients.add(webSocket);
-        notifyListeners();
-
-        final clientName =
-            request.headers.value('client-name') ?? 'Неизвестный';
-        print('👤 Клиент: $clientName');
-
-        webSocket.listen(
-          (message) => _handleServerMessage(webSocket, message),
-          onDone: () {
-            print('❌ Клиент отключился');
-            _connectedClients.remove(webSocket);
-            notifyListeners();
-          },
-          onError: (error) {
-            print('⚠️ Ошибка от клиента: $error');
-            _connectedClients.remove(webSocket);
-            notifyListeners();
-          },
-        );
-      } else {
-        request.response.statusCode = 404;
-        request.response.write('WebSocket endpoint: /ws');
-        await request.response.close();
-      }
-    } catch (e) {
-      print('❌ Ошибка обработки подключения: $e');
-    }
-  }
-
-  void _handleServerMessage(WebSocket socket, dynamic message) {
-    try {
-      final data = jsonDecode(message.toString());
-      final type = data['type'] as String?;
-
-      if (type == null) return;
-
-      switch (type) {
-        case 'handshake':
-          _handleClientHandshake(socket, data);
-          break;
-        case 'metadata_ack':
-          print('✅ Клиент готов принимать файл');
-          break;
-        case 'chunk_ack':
-          _handleChunkAckFromClient(socket, data);
-          break;
-        case 'file_received':
-          _handleFileReceivedFromClient(socket, data);
-          break;
-        case 'progress_update':
-          _handleProgressUpdateFromClient(socket, data);
-          break;
-        case 'cancel_transfer':
-          _handleCancelTransferFromClient(socket, data);
-          break;
-      }
-    } catch (e) {
-      print('❌ Ошибка обработки сообщения сервером: $e');
+    switch (type) {
+      case 'handshake':
+        _handleClientHandshake(socket, data);
+        break;
+      case 'metadata_ack':
+        print('✅ Клиент готов принимать файл');
+        break;
+      case 'chunk_ack':
+        _handleChunkAckFromClient(socket, data);
+        break;
+      case 'file_received':
+        _handleFileReceivedFromClient(socket, data);
+        break;
+      case 'progress_update':
+        _handleProgressUpdateFromClient(socket, data);
+        break;
+      case 'cancel_transfer':
+        _handleCancelTransferFromClient(socket, data);
+        break;
     }
   }
 
@@ -296,42 +218,34 @@ class FileTransferService extends ChangeNotifier {
     if (!isSubscribed.value) {
       print('⚠️ У сервера нет подписки, отправляю уведомление клиенту');
 
-      socket.add(
-        jsonEncode({
-          'type': 'subscription_required',
-          'timestamp': DateTime.now().toIso8601String(),
-        }),
-      );
+      await _webSocketServer.sendToClient(socket, {
+        'type': 'subscription_required',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
 
-      // Закрываем соединение после отправки сообщения
+      // Закрываем соединение - сервис сам удалит клиента
       await Future.delayed(Duration(milliseconds: 500));
-
       try {
         await socket.close();
       } catch (e) {
         print('⚠️ Ошибка закрытия сокета: $e');
       }
 
-      // Удаляем клиента из списка
-      _connectedClients.remove(socket);
       notifyListeners();
-
       return;
     }
 
     // Если подписка есть - продолжаем обычный handshake
-    socket.add(
-      jsonEncode({
-        'type': 'handshake_ack',
-        'message': 'Добро пожаловать',
-        'serverInfo': {
-          'name': await _getDeviceName(),
-          'platform': Platform.operatingSystem,
-          'ip': _localIp,
-        },
-        'timestamp': DateTime.now().toIso8601String(),
-      }),
-    );
+    await _webSocketServer.sendToClient(socket, {
+      'type': 'handshake_ack',
+      'message': 'Добро пожаловать',
+      'serverInfo': {
+        'name': await _getDeviceName(),
+        'platform': Platform.operatingSystem,
+        'ip': _webSocketServer.localIp,
+      },
+      'timestamp': DateTime.now().toIso8601String(),
+    });
 
     notifyListeners();
   }
@@ -396,10 +310,8 @@ class FileTransferService extends ChangeNotifier {
       // Очищаем все активные передачи
       _activeTransfers.clear();
 
-      // Создаем копию для безопасной итерации
-      final receiversCopy = Map<String, FileReceiver>.from(_fileReceivers);
-
       // Закрываем все активные файловые потоки
+      final receiversCopy = Map<String, FileReceiver>.from(_fileReceivers);
       for (final entry in receiversCopy.entries) {
         try {
           await entry.value.close();
@@ -409,27 +321,10 @@ class FileTransferService extends ChangeNotifier {
       }
       _fileReceivers.clear();
 
-      // Создаем копию для безопасной итерации
-      final clientsCopy = List<WebSocket>.from(_connectedClients);
+      // Останавливаем WebSocket сервер
+      await _webSocketServer.stopServer();
 
-      // Закрываем все подключения клиентов
-      for (final client in clientsCopy) {
-        try {
-          await client.close();
-        } catch (e) {
-          print('⚠️ Ошибка закрытия клиента: $e');
-        }
-      }
-      _connectedClients.clear();
-
-      // Закрываем HTTP сервер
-      if (_httpServer != null) {
-        await _httpServer!.close();
-        _httpServer = null;
-      }
-
-      // Сбрасываем все состояния
-      _isServerRunning = false;
+      // Сбрасываем состояния
       _status = 'Сервер остановлен';
       _connectedServerIp = null;
       _connectedServerName = null;
@@ -442,18 +337,18 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  // =========== ОТПРАВКА ФАЙЛОВ С СЕРВЕРА НА КЛИЕНТ ===========
+  // MARK: - ОТПРАВКА ФАЙЛОВ С СЕРВЕРА НА КЛИЕНТ
 
   Future<void> sendFilesToClient(
     List<File> files,
     WebSocket? targetClient,
   ) async {
-    if (_connectedClients.isEmpty) {
+    if (_webSocketServer.connectedClients.isEmpty) {
       throw Exception('Нет подключенных клиентов');
     }
 
     // Используем целевого клиента или первого подключенного
-    final client = targetClient ?? _connectedClients.first;
+    final client = targetClient ?? _webSocketServer.connectedClients.first;
 
     print('🚀 Сервер начинает отправку файлов клиенту');
 
@@ -509,7 +404,7 @@ class FileTransferService extends ChangeNotifier {
         },
         sendMessage: (message) {
           try {
-            client.add(jsonEncode(message));
+            _webSocketServer.sendToClient(client, message);
           } catch (e) {
             print('❌ Ошибка отправки сообщения клиенту: $e');
           }
@@ -563,7 +458,7 @@ class FileTransferService extends ChangeNotifier {
         },
         sendMessage: (message) {
           try {
-            client.add(jsonEncode(message));
+            _webSocketServer.sendToClient(client, message);
           } catch (e) {
             print('❌ Ошибка отправки сообщения клиенту: $e');
           }
@@ -587,7 +482,7 @@ class FileTransferService extends ChangeNotifier {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      client.add(jsonEncode(videoGroupMetadata));
+      await _webSocketServer.sendToClient(client, videoGroupMetadata);
       print('📤 Отправлены метаданные видео группы немедленно');
     }
 
@@ -650,7 +545,8 @@ class FileTransferService extends ChangeNotifier {
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    socket.add(jsonEncode(groupMetadata));
+    _webSocketServer.sendToClient(socket, groupMetadata);
+
     await Future.delayed(Duration(milliseconds: 100));
 
     int totalBytesSent = 0;
@@ -1014,7 +910,7 @@ class FileTransferService extends ChangeNotifier {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      socket.add(jsonEncode(progressMessage));
+      _webSocketServer.sendToClient(socket, progressMessage);
     } catch (e) {
       print('❌ Ошибка отправки прогресса клиенту: $e');
     }
@@ -1052,18 +948,13 @@ class FileTransferService extends ChangeNotifier {
         };
 
         // Используем копию списка для безопасной итерации
-        final connectedClientsCopy = List<WebSocket>.from(_connectedClients);
+        final connectedClientsCopy = List<WebSocket>.from(
+          _webSocketServer.connectedClients,
+        );
 
         if (connectedClientsCopy.isNotEmpty) {
           // Сервер отменяет - отправляем клиенту
-          for (final client in connectedClientsCopy) {
-            try {
-              client.add(jsonEncode(cancelMessage));
-              print('📤 Отправлена отмена клиенту: $transferId');
-            } catch (e) {
-              print('⚠️ Ошибка отправки отмены клиенту: $e');
-            }
-          }
+          _webSocketServer.broadcast(cancelMessage);
         } else if (_clientChannel != null) {
           // Клиент отменяет - отправляем серверу
           _sendClientMessage(cancelMessage);
@@ -1102,7 +993,7 @@ class FileTransferService extends ChangeNotifier {
       rethrow;
     }
   }
-  // =========== КЛИЕНТСКИЕ МЕТОДЫ (ПРИЕМ ФАЙЛОВ) ===========
+  // MARK: - КЛИЕНТСКИЕ МЕТОДЫ (ПРИЕМ ФАЙЛОВ)
 
   void resetSubscriptionDialogFlag() {
     _shouldShowSubscriptionDialog = false;
@@ -1619,36 +1510,7 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  // =========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===========
-
-  Future<String> _getLocalIp() async {
-    try {
-      for (final interface in await NetworkInterface.list()) {
-        for (final addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            final ip = addr.address;
-            if (ip.startsWith('192.168.') ||
-                ip.startsWith('10.') ||
-                ip.startsWith('172.16.')) {
-              return ip;
-            }
-          }
-        }
-      }
-
-      for (final interface in await NetworkInterface.list()) {
-        for (final addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
-          }
-        }
-      }
-    } catch (e) {
-      print('⚠️ Ошибка получения IP: $e');
-    }
-
-    return '127.0.0.1';
-  }
+  // MARK: - ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
 
   Future<String> _getDeviceName() async {
     if (Platform.isAndroid) return 'Android Устройство';
@@ -1656,9 +1518,9 @@ class FileTransferService extends ChangeNotifier {
     return 'Устройство';
   }
 
-  // MARK: КОНВЕРТАЦИЯ ВИДЕО
+  // MARK: - КОНВЕРТАЦИЯ ВИДЕО
 
-  // MARK: СОХРАНЕНИЕ ФАЙЛОВ
+  // MARK: - СОХРАНЕНИЕ ФАЙЛОВ
 
   Future<void> _saveToGallery(
     File file,
@@ -1722,7 +1584,7 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  // MARK: УПРАВЛЕНИЕ ПОЛУЧЕННЫМИ МЕДИА
+  // MARK: - УПРАВЛЕНИЕ ПОЛУЧЕННЫМИ МЕДИА
 
   Future<void> openMediaInGallery(ReceivedMedia media) async {
     try {
@@ -1742,16 +1604,16 @@ class FileTransferService extends ChangeNotifier {
     await _mediaManager.refreshMedia();
   }
 
-  // =========== ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ UI ===========
+  // MARK: - ПУБЛИЧНЫЕ МЕТОДЫ ДЛЯ UI
 
   // Метод для сервера: отправить файлы клиенту
   Future<void> sendFilesToConnectedClient(List<File> files) async {
-    if (_connectedClients.isEmpty) {
+    if (_webSocketServer.connectedClients.isEmpty) {
       throw Exception('Нет подключенных клиентов');
     }
 
     // Отправляем файлы первому подключенному клиенту
-    await sendFilesToClient(files, _connectedClients.first);
+    await sendFilesToClient(files, _webSocketServer.connectedClients.first);
   }
 
   // Метод для сервера: отправить файлы конкретному клиенту
@@ -1763,11 +1625,10 @@ class FileTransferService extends ChangeNotifier {
   }
 
   // Получить список подключенных клиентов (для UI сервера)
-  List<WebSocket> get connectedClients => List.from(_connectedClients);
 
   // Получить информацию о клиенте
   String getClientInfo(WebSocket client) {
-    final index = _connectedClients.indexOf(client);
+    final index = _webSocketServer.connectedClients.indexOf(client);
     return 'Клиент ${index + 1}';
   }
 
@@ -1794,7 +1655,7 @@ class FileTransferService extends ChangeNotifier {
   }
 }
 
-// =========== ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ ===========
+// MARK: - ВСПОМОГАТЕЛЬНЫЕ КЛАССЫ
 
 class FileReceiver {
   final String transferId;

@@ -15,12 +15,6 @@ class MediaManagerService extends ChangeNotifier {
 
   List<ReceivedMedia> get receivedMedia => List.unmodifiable(_receivedMedia);
 
-  @override
-  void dispose() {
-    _receivedMedia.clear();
-    super.dispose();
-  }
-
   MediaManagerService() {
     _initialize();
   }
