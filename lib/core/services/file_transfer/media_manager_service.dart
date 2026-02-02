@@ -77,24 +77,31 @@ class MediaManagerService extends ChangeNotifier {
     required File file,
     required String fileName,
     required String mimeType,
-    DateTime? receivedAt,
+    required DateTime receivedAt,
   }) async {
     try {
+      // Проверяем, существует ли файл
+      if (!await file.exists()) {
+        print('❌ Файл не существует при добавлении в медиа: ${file.path}');
+        return;
+      }
+
+      final fileSize = await file.length();
+
       final media = ReceivedMedia(
         file: file,
         fileName: fileName,
-        fileSize: await file.length(),
+        fileSize: fileSize,
         mimeType: mimeType,
-        receivedAt: receivedAt ?? DateTime.now(),
+        receivedAt: receivedAt,
       );
 
-      _receivedMedia.insert(0, media);
+      _receivedMedia.add(media);
       notifyListeners();
 
-      print('✅ Медиа добавлено: $fileName');
+      print('✅ Медиа добавлено: $fileName ($fileSize байт)');
     } catch (e) {
       print('❌ Ошибка добавления медиа: $e');
-      rethrow;
     }
   }
 

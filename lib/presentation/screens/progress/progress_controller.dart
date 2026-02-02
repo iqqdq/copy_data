@@ -310,6 +310,7 @@ class ProgressController extends ChangeNotifier {
     _showToastCallback = null;
     _navigateBackCallback = null;
     _fileTransferService = null;
+
     super.dispose();
   }
 }

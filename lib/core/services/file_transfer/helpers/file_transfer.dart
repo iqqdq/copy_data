@@ -1,21 +1,31 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
-import '../../../core.dart';
-
-class FileTransfer {
+class FileTransfer with ChangeNotifier {
   final String transferId;
   final String fileName;
-  int fileSize;
-  String fileType;
-  File file;
-  String targetPath;
+  final int fileSize;
+  final String fileType;
+  final File file;
+  final String targetPath;
+
+  final void Function(double progress) onProgress;
+  final void Function(File file) onComplete;
+  final void Function(String error) onError;
+  final void Function(Map<String, dynamic> message) sendMessage;
+
+  final int totalFiles;
+  int completedFiles;
+
   int receivedBytes = 0;
-  int totalFiles = 0;
-  int completedFiles = 0;
-  final Function(double) onProgress;
-  final Function(File) onComplete;
-  final Function(String) onError;
-  final Function(Map<String, dynamic>) sendMessage;
+
+  // Флаг, чтобы onComplete вызывался только один раз
+  bool _hasCompleted = false;
+
+  double get progress {
+    if (fileSize == 0) return 0.0;
+    return (receivedBytes / fileSize * 100).clamp(0.0, 100.0);
+  }
 
   FileTransfer({
     required this.transferId,
@@ -28,50 +38,49 @@ class FileTransfer {
     required this.onComplete,
     required this.onError,
     required this.sendMessage,
-    this.totalFiles = 1,
-    this.completedFiles = 0,
+    required this.totalFiles,
+    required this.completedFiles,
   });
 
-  double get progress {
-    if (fileSize <= 0) return 0.0;
-    final calculated = (receivedBytes.toDouble() / fileSize.toDouble()) * 100.0;
-    return calculated.clamp(0.0, 100.0);
+  void updateProgress(int newReceivedBytes) {
+    if (_hasCompleted) return; // Если уже завершено, не обновляем
+
+    receivedBytes = newReceivedBytes;
+
+    // Если прогресс достиг 100% и еще не вызывали onComplete
+    if (receivedBytes >= fileSize && !_hasCompleted) {
+      _hasCompleted = true;
+
+      // Вызываем с небольшой задержкой, чтобы избежать повторных вызовов
+      Future.delayed(Duration(milliseconds: 100), () {
+        if (!_hasCompleted) return; // Дополнительная проверка
+        print('🎯 Вызов onComplete для передачи: $transferId');
+        onComplete(file);
+      });
+    }
+
+    // Обновляем UI через callback
+    onProgress(progress);
+
+    notifyListeners();
   }
 
-  void updateProgress(int bytes) {
-    receivedBytes = bytes;
-    final clampedProgress = progress;
-    onProgress(clampedProgress);
-  }
-
-  void completeFile() {
-    completedFiles++;
-    if (completedFiles >= totalFiles) {
-      receivedBytes = fileSize;
-      onProgress(100.0);
+  // Метод для явного завершения
+  void markAsCompleted() {
+    if (!_hasCompleted) {
+      _hasCompleted = true;
+      receivedBytes = fileSize; // Устанавливаем 100%
       onComplete(file);
+      notifyListeners();
     }
   }
 
-  String get sizeFormatted {
-    return FileUtils.formatBytes(fileSize);
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is FileTransfer && other.transferId == transferId;
   }
 
-  String get progressSizeFormatted {
-    // Используем синхронизированные единицы измерения
-    if (fileSize >= 1024 * 1024) {
-      // Для больших файлов используем MB для обоих
-      final receivedMB = receivedBytes / (1024 * 1024);
-      final totalMB = fileSize / (1024 * 1024);
-      return '${receivedMB.toStringAsFixed(2)} / ${totalMB.toStringAsFixed(2)} MB';
-    } else if (fileSize >= 1024) {
-      // Для средних файлов используем KB для обоих
-      final receivedKB = receivedBytes / 1024;
-      final totalKB = fileSize / 1024;
-      return '${receivedKB.toStringAsFixed(2)} / ${totalKB.toStringAsFixed(2)} KB';
-    } else {
-      // Для маленьких файлов используем байты
-      return '$receivedBytes / $fileSize B';
-    }
-  }
+  @override
+  int get hashCode => transferId.hashCode;
 }

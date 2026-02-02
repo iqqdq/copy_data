@@ -86,6 +86,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   // При выходе из окна
   Future<void> _cancelAllTransfersWithDialog() async {
+    if (!_controller.hasAnyTransferStarted()) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     if (_controller.areAllTransfersCompleteOrCancelled()) {
       if (mounted) Navigator.pop(context);
       return;

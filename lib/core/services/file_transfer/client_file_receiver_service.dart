@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:path/path.dart' as path;
 
 import '../../core.dart';
@@ -11,6 +10,12 @@ class ClientFileReceiverService {
   final GallerySaverService _gallerySaver;
   final FileTransferManager _transferManager;
   final Function(Map<String, dynamic>) _sendClientMessage;
+
+  // Храним отмененные передачи
+  final Set<String> _cancelledTransfers = {};
+
+  // Храним временные файлы до завершения передачи (используем ReceivedMedia)
+  final Map<String, List<ReceivedMedia>> _pendingMedia = {};
 
   ClientFileReceiverService({
     required MediaManagerService mediaManager,
@@ -49,9 +54,13 @@ class ClientFileReceiverService {
         },
         onComplete: (file) {
           print('✅ Групповая передача завершена: $fileName');
+          // При завершении группы сохраняем файлы
+          _savePendingMediaIfNotCancelled(transferId);
         },
         onError: (error) {
           print('❌ Ошибка групповой передачи: $error');
+          // При ошибке удаляем файлы
+          _deletePendingMedia(transferId);
           _transferManager.removeTransfer(transferId);
         },
         sendMessage: _sendClientMessage,
@@ -106,7 +115,7 @@ class ClientFileReceiverService {
       final mediaDirPath = await _mediaManager.getMediaDirectoryPath();
       final tempPath = path.join(
         mediaDirPath,
-        'from_server_${timestamp}_$safeFileName',
+        'temp_${timestamp}_$safeFileName',
       );
 
       // Проверяем, существует ли уже групповая передача
@@ -139,6 +148,7 @@ class ClientFileReceiverService {
             file: file,
             fileType: fileType,
             fileName: fileName,
+            fileSize: fileSize,
             transferId: transferId,
             isGroupFile: isGroupFile,
             groupTransfer: groupTransfer,
@@ -153,6 +163,8 @@ class ClientFileReceiverService {
             print('⚠️ Ошибка в файле ${fileIndex + 1} групповой передачи');
           } else {
             _transferManager.removeTransfer(transferId);
+            // При ошибке удаляем файлы этой передачи
+            _deletePendingMedia(transferId);
           }
         },
       );
@@ -173,10 +185,14 @@ class ClientFileReceiverService {
           },
           onComplete: (file) {
             print('✅ Передача от сервера завершена');
+            // При завершении одиночной передачи сохраняем файл
+            _savePendingMediaIfNotCancelled(transferId);
           },
           onError: (error) {
             print('❌ Ошибка передачи от сервера: $error');
             _transferManager.removeTransfer(transferId);
+            // При ошибке удаляем файл
+            _deletePendingMedia(transferId);
           },
           sendMessage: _sendClientMessage,
           totalFiles: 1,
@@ -205,6 +221,12 @@ class ClientFileReceiverService {
     final isLast = data['isLast'] as bool? ?? false;
 
     // Проверяем, не отменена ли передача
+    if (_cancelledTransfers.contains(transferId) ||
+        _isGroupCancelled(transferId)) {
+      print('⚠️ Пропускаем чанк для отмененной передачи: $transferId');
+      return;
+    }
+
     final receiver = _transferManager.getFileReceiver(transferId);
     if (receiver == null) {
       print('⚠️ Чанк для неизвестной или отмененной передачи: $transferId');
@@ -304,18 +326,75 @@ class ClientFileReceiverService {
     }
   }
 
+  // MARK: - Обработка отмены передач
+  void handleRemoteCancellation(Map<String, dynamic> data) {
+    final transferId = data['transferId'] as String?;
+    if (transferId != null) {
+      print('🛑 Получена отмена передачи от другой стороны: $transferId');
+      _cancelledTransfers.add(transferId);
+
+      // Удаляем все файлы этой передачи
+      _deletePendingMedia(transferId);
+
+      // Также удаляем файлы подгрупп (если это групповая передача)
+      final keysToRemove = _pendingMedia.keys
+          .where((key) => key.startsWith('${transferId}_') || key == transferId)
+          .toList();
+
+      for (final key in keysToRemove) {
+        _deletePendingMedia(key);
+      }
+    }
+  }
+
   // MARK: - ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
 
   Future<void> _handleFileReceived({
     required File file,
     required String fileType,
     required String fileName,
+    required int fileSize,
     required String transferId,
     required bool isGroupFile,
     required FileTransfer? groupTransfer,
     required int fileIndex,
   }) async {
-    await _saveToGallery(file, fileType, fileName);
+    final groupId = isGroupFile ? _extractGroupId(transferId) : transferId;
+
+    // Проверяем, не отменена ли передача
+    if (_cancelledTransfers.contains(transferId) ||
+        _cancelledTransfers.contains(groupId)) {
+      print('⚠️ Передача отменена, удаляем временный файл: $fileName');
+
+      try {
+        if (await file.exists()) {
+          await file.delete();
+          print('🗑️ Удален временный файл: ${file.path}');
+        }
+      } catch (e) {
+        print('⚠️ Ошибка удаления временного файла: $e');
+      }
+
+      await _transferManager.closeFileReceiver(transferId);
+      return;
+    }
+
+    // Создаем ReceivedMedia объект
+    final receivedMedia = ReceivedMedia(
+      file: file,
+      fileName: fileName,
+      fileSize: fileSize,
+      mimeType: fileType,
+      receivedAt: DateTime.now(),
+    );
+
+    // Добавляем в очередь ожидания сохранения
+    if (!_pendingMedia.containsKey(groupId)) {
+      _pendingMedia[groupId] = [];
+    }
+
+    _pendingMedia[groupId]!.add(receivedMedia);
+
     await _transferManager.closeFileReceiver(transferId);
 
     // Отправляем подтверждение серверу
@@ -332,9 +411,10 @@ class ClientFileReceiverService {
 
       print(
         '✅ Файл ${fileIndex + 1}/${groupTransfer.totalFiles} завершен: $fileName '
-        '(${FileUtils.formatBytes(await file.length())})',
+        '(${FileUtils.formatBytes(fileSize)})',
       );
 
+      // КОГДА ВСЯ ГРУППА ЗАВЕРШЕНА НА 100%
       if (groupTransfer.completedFiles >= groupTransfer.totalFiles) {
         print(
           '🎉 Вся группа от сервера завершена: ${groupTransfer.fileName} '
@@ -342,19 +422,70 @@ class ClientFileReceiverService {
           '${FileUtils.formatBytes(groupTransfer.fileSize)})',
         );
 
-        // Обновляем прогресс до 100%
+        // Обновляем прогресс до 100% (вызовет onComplete)
         groupTransfer.updateProgress(groupTransfer.fileSize);
+
+        // НЕ вызываем здесь savePendingMediaIfNotCancelled,
+        // потому что onComplete уже вызовет его
       }
     } else {
-      print('✅ Одиночный файл завершен: $fileName');
+      // Для одиночных файлов - проверяем прогресс
+      final transfer = _transferManager.getTransfer(transferId);
+      if (transfer != null && transfer.progress >= 100) {
+        print('✅ Одиночный файл завершен: $fileName');
+        // Здесь тоже не вызываем, onComplete вызовет
+      }
+    }
+  }
+
+  // Сохраняем медиа если передача не отменена
+  Future<void> _savePendingMediaIfNotCancelled(String groupId) async {
+    if (_cancelledTransfers.contains(groupId)) {
+      print('⚠️ Передача отменена, удаляем медиа группы: $groupId');
+      await _deletePendingMedia(groupId);
+      return;
     }
 
-    await _mediaManager.addMedia(
-      file: file,
-      fileName: fileName,
-      mimeType: fileType,
-      receivedAt: DateTime.now(),
-    );
+    final pendingMedia = _pendingMedia[groupId];
+    if (pendingMedia == null || pendingMedia.isEmpty) return;
+
+    print('💾 Сохраняем ${pendingMedia.length} файлов группы: $groupId');
+
+    for (final media in pendingMedia) {
+      await _saveToGallery(media.file, media.mimeType, media.fileName);
+
+      // Добавляем в MediaManager
+      await _mediaManager.addMedia(
+        file: media.file,
+        fileName: media.fileName,
+        mimeType: media.mimeType,
+        receivedAt: media.receivedAt,
+      );
+    }
+
+    // Очищаем очередь после сохранения
+    _pendingMedia.remove(groupId);
+  }
+
+  // Удаляем все медиа группы
+  Future<void> _deletePendingMedia(String groupId) async {
+    final pendingMedia = _pendingMedia[groupId];
+    if (pendingMedia == null) return;
+
+    print('🗑️ Удаляем ${pendingMedia.length} файлов группы: $groupId');
+
+    for (final media in pendingMedia) {
+      try {
+        if (await media.file.exists()) {
+          await media.file.delete();
+          print('🗑️ Удален файл: ${media.fileName}');
+        }
+      } catch (e) {
+        print('⚠️ Ошибка удаления файла ${media.fileName}: $e');
+      }
+    }
+
+    _pendingMedia.remove(groupId);
   }
 
   Future<void> _saveToGallery(
@@ -373,6 +504,7 @@ class ClientFileReceiverService {
         print('💾 Файл сохранен в галерею: $originalName');
 
         if (result.savedPath != null && result.savedPath!.isNotEmpty) {
+          // Обновляем путь файла в медиа менеджере
           await _mediaManager.updateMediaFile(
             originalName,
             File(result.savedPath!),
@@ -409,5 +541,25 @@ class ClientFileReceiverService {
       print('❌ Ошибка сохранения файла: $e');
       print('Stack: $stackTrace');
     }
+  }
+
+  // MARK: - Вспомогательные методы
+
+  bool _isGroupCancelled(String transferId) {
+    final groupId = _extractGroupId(transferId);
+    return _cancelledTransfers.contains(groupId);
+  }
+
+  String _extractGroupId(String transferId) {
+    if (transferId.contains('_')) {
+      final parts = transferId.split('_');
+      final lastPart = parts.last;
+
+      // Проверяем, можно ли преобразовать последнюю часть в число
+      if (int.tryParse(lastPart) != null) {
+        return parts.sublist(0, parts.length - 1).join('_');
+      }
+    }
+    return transferId;
   }
 }
