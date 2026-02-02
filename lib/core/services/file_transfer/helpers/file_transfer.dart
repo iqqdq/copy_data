@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../../../core.dart';
+
 class FileTransfer {
   final String transferId;
   final String fileName;
@@ -51,14 +53,8 @@ class FileTransfer {
     }
   }
 
-  String get status {
-    if (completedFiles >= totalFiles) return 'Завершено';
-    if (receivedBytes > 0) return 'В процессе';
-    return 'Ожидание';
-  }
-
   String get sizeFormatted {
-    return _formatBytes(fileSize);
+    return FileUtils.formatBytes(fileSize);
   }
 
   String get progressSizeFormatted {
@@ -77,16 +73,5 @@ class FileTransfer {
       // Для маленьких файлов используем байты
       return '$receivedBytes / $fileSize B';
     }
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-    if (bytes < 1024 * 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
-    }
-    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 }

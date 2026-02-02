@@ -9,7 +9,7 @@ class ProgressTile extends StatelessWidget {
   final FileTransferService service;
   final List<FileTransfer> transfers;
   final Map<String, bool> cancelledTransfers;
-  final Function(String id) onTransferCancel;
+  final Function(String id)? onTransferCancel;
 
   const ProgressTile({
     super.key,
@@ -18,7 +18,7 @@ class ProgressTile extends StatelessWidget {
     required this.service,
     required this.transfers,
     required this.cancelledTransfers,
-    required this.onTransferCancel,
+    this.onTransferCancel,
   });
 
   @override
@@ -31,6 +31,7 @@ class ProgressTile extends StatelessWidget {
 
     // Считаем общую статистику по всем передачам в группе
     final progress = _calculateAverageProgress(transfers);
+
     int totalFiles = 0;
     int completedFiles = 0;
     int totalReceived = 0;
@@ -193,7 +194,9 @@ class ProgressTile extends StatelessWidget {
               child: CustomButton.primary(
                 title: isSending ? 'Cancel sending' : 'Cancel receiving',
                 onPressed: () {
-                  onTransferCancel(primaryTransfer.transferId);
+                  if (onTransferCancel != null) {
+                    onTransferCancel!(primaryTransfer.transferId);
+                  }
                 },
               ),
             ),

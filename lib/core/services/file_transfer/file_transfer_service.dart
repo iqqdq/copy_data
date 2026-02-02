@@ -24,6 +24,7 @@ class FileTransferService extends ChangeNotifier {
   late ServerFileSenderService _serverFileSender;
 
   // UI состояние
+
   bool _shouldShowSubscriptionDialog = false;
 
   // Колбэки
@@ -77,6 +78,10 @@ class FileTransferService extends ChangeNotifier {
     _serverFileSender = ServerFileSenderService(
       videoConverter: _videoConverter,
       transferManager: _transferManager,
+      onProgressUpdated: () {
+        print('🔄 Сервис уведомляет UI о прогрессе');
+        notifyListeners();
+      },
     );
 
     _clientFileReceiver = ClientFileReceiverService(
@@ -444,12 +449,5 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> refreshReceivedMedia() async {
     await _mediaManager.refreshMedia();
-  }
-
-  // MARK: - ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
-
-  String getClientInfo(WebSocket client) {
-    final index = _webSocketServer.connectedClients.indexOf(client);
-    return 'Клиент ${index + 1}';
   }
 }

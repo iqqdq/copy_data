@@ -1,7 +1,7 @@
-// server_file_sender_service.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
@@ -11,10 +11,12 @@ import '../../core.dart';
 class ServerFileSenderService {
   final VideoConverterService _videoConverter;
   final FileTransferManager _transferManager;
+  final VoidCallback onProgressUpdated;
 
   ServerFileSenderService({
     required VideoConverterService videoConverter,
     required FileTransferManager transferManager,
+    required this.onProgressUpdated,
   }) : _videoConverter = videoConverter,
        _transferManager = transferManager;
 
@@ -362,7 +364,12 @@ class ServerFileSenderService {
 
           final bytesForProgress = (clampedProgress / 100.0 * totalGroupSize)
               .toInt();
+
+          // Обновляем прогресс
           transfer.updateProgress(bytesForProgress);
+
+          // Уведомляем FileTransferService
+          onProgressUpdated.call();
 
           _sendProgressUpdate(
             socket,
