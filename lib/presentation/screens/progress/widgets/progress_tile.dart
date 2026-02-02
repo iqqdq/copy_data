@@ -6,8 +6,8 @@ import '../../../presentation.dart';
 class ProgressTile extends StatelessWidget {
   final bool isPhoto;
   final bool isSending;
-  final FileTransferService service;
   final List<FileTransfer> transfers;
+  final Map<String, FileTransfer> activeTransfers;
   final Map<String, bool> cancelledTransfers;
   final Function(String id)? onTransferCancel;
 
@@ -15,8 +15,8 @@ class ProgressTile extends StatelessWidget {
     super.key,
     required this.isPhoto,
     required this.isSending,
-    required this.service,
     required this.transfers,
+    required this.activeTransfers,
     required this.cancelledTransfers,
     this.onTransferCancel,
   });
@@ -66,7 +66,7 @@ class ProgressTile extends StatelessWidget {
     // 3. Передача активна в сервисе (т.е. можно отменить)
     final shouldShowCancelButton =
         !isFinalState &&
-        service.activeTransfers.containsKey(primaryTransfer.transferId);
+        activeTransfers.containsKey(primaryTransfer.transferId);
 
     return SizedBox(
       child: Column(
