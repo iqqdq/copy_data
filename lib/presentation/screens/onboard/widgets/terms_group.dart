@@ -17,7 +17,7 @@ class TermsGroup extends StatelessWidget {
       children: [
         _TermButton(
           title: 'Terms of use',
-          onPressed: () => launchUrlString('AppConstants.termsUrl'), // TODO:
+          onPressed: () => launchUrlString(AppConstants.termsUrl),
         ),
 
         const Spacer(),
@@ -28,7 +28,7 @@ class TermsGroup extends StatelessWidget {
 
         _TermButton(
           title: 'Privacy Policy',
-          onPressed: () => launchUrlString('AppConstants.privacyUrl'), // TODO:
+          onPressed: () => launchUrlString(AppConstants.privacyUrl),
         ),
       ],
     );

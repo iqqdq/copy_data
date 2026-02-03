@@ -6,7 +6,6 @@ import 'package:path/path.dart' as path;
 import '../../core.dart';
 
 class ClientFileReceiverService {
-  final MediaManagerService _mediaManager;
   final GallerySaverService _gallerySaver;
   final FileTransferManager _transferManager;
   final Function(Map<String, dynamic>) _sendClientMessage;
@@ -18,12 +17,10 @@ class ClientFileReceiverService {
   final Map<String, List<ReceivedMedia>> _pendingMedia = {};
 
   ClientFileReceiverService({
-    required MediaManagerService mediaManager,
     required GallerySaverService gallerySaver,
     required FileTransferManager transferManager,
     required Function(Map<String, dynamic>) sendClientMessage,
-  }) : _mediaManager = mediaManager,
-       _gallerySaver = gallerySaver,
+  }) : _gallerySaver = gallerySaver,
        _transferManager = transferManager,
        _sendClientMessage = sendClientMessage;
 
@@ -112,9 +109,10 @@ class ClientFileReceiverService {
       // Создаем временный файл для приема
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final safeFileName = fileName.replaceAll(RegExp(r'[^\w\s.-]'), '_');
-      final mediaDirPath = await _mediaManager.getMediaDirectoryPath();
+      final tempDirPath = await FileUtils.getTempDirectoryPath();
+
       final tempPath = path.join(
-        mediaDirPath,
+        tempDirPath,
         'temp_${timestamp}_$safeFileName',
       );
 
@@ -453,14 +451,6 @@ class ClientFileReceiverService {
 
     for (final media in pendingMedia) {
       await _saveToGallery(media.file, media.mimeType, media.fileName);
-
-      // Добавляем в MediaManager
-      await _mediaManager.addMedia(
-        file: media.file,
-        fileName: media.fileName,
-        mimeType: media.mimeType,
-        receivedAt: media.receivedAt,
-      );
     }
 
     // Очищаем очередь после сохранения
@@ -494,6 +484,8 @@ class ClientFileReceiverService {
     String originalName,
   ) async {
     try {
+      print('💾 Сохраняю файл в галерею: $originalName');
+
       final result = await _gallerySaver.saveToGallery(
         file: file,
         mimeType: mimeType,
@@ -502,40 +494,18 @@ class ClientFileReceiverService {
 
       if (result.isSaved) {
         print('💾 Файл сохранен в галерею: $originalName');
-
-        if (result.savedPath != null && result.savedPath!.isNotEmpty) {
-          // Обновляем путь файла в медиа менеджере
-          await _mediaManager.updateMediaFile(
-            originalName,
-            File(result.savedPath!),
-          );
-        }
-
-        // Удаляем временный файл после успешного сохранения
-        try {
-          if (await file.exists()) {
-            await file.delete();
-            print('🗑️ Временный файл удален: ${file.path}');
-          }
-        } catch (e) {
-          print('⚠️ Ошибка удаления временного файла: $e');
-        }
       } else {
-        print('⚠️ Не удалось сохранить файл в галерею, оставляю локально');
+        print('⚠️ Не удалось сохранить файл в галерею');
+      }
 
-        // Перемещаем файл из временной директории в постоянную
-        try {
-          final permanentFile = await _gallerySaver.moveToPermanentDirectory(
-            tempFile: file,
-            originalName: originalName,
-            appDocumentsDirectory: _mediaManager.appDocumentsDirectory!,
-            receivedFilesDir: _mediaManager.receivedFilesDir,
-          );
-
-          await _mediaManager.updateMediaFile(originalName, permanentFile);
-        } catch (e) {
-          print('⚠️ Ошибка перемещения файла: $e');
+      // Удаляем временный файл
+      try {
+        if (await file.exists()) {
+          await file.delete();
+          print('🗑️ Временный файл удален: ${file.path}');
         }
+      } catch (e) {
+        print('⚠️ Ошибка удаления временного файла: $e');
       }
     } catch (e, stackTrace) {
       print('❌ Ошибка сохранения файла: $e');

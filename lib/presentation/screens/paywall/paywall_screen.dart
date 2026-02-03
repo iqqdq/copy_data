@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../../../app.dart';
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -14,6 +13,7 @@ class PaywallScreen extends StatefulWidget {
 
 class _PaywallScreenState extends State<PaywallScreen> {
   bool _value = false;
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -99,14 +99,17 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
                             CustomButton.primary(
                               title: 'Continue',
-                              isLoading: false, // TODO:
+                              isLoading: _isLoading, // TODO:
                               onPressed: () {
-                                isSubscribed.value = true;
+                                isSubscribed.value = true; // TODO: PURCHASE
                                 Navigator.canPop(context)
                                     ? Navigator.pop(context)
-                                    : Navigator.pushReplacementNamed(
+                                    :
+                                      // TODO: CHECK IF FIRST START
+                                      Navigator.pushReplacementNamed(
                                         context,
                                         AppRoutes.main,
+                                        // TODO: CHECK IF FIRST START ? AppRoutes.tutorial : AppRoutes.main,
                                       );
                               },
                             ),
@@ -128,25 +131,26 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
             ),
 
-            // TODO: IS_LOADING
-            Padding(
-              padding: EdgeInsets.only(left: 16.0),
-              child: CustomIconButton(
-                icon: SvgPicture.asset(
-                  'assets/icons/cross.svg',
-                  colorFilter: ColorFilter.mode(
-                    AppColors.black,
-                    BlendMode.srcIn,
+            _isLoading
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: EdgeInsets.only(left: 16.0),
+                    child: CustomIconButton(
+                      icon: SvgPicture.asset(
+                        'assets/icons/cross.svg',
+                        colorFilter: ColorFilter.mode(
+                          AppColors.black,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                      onPressed: () => Navigator.canPop(context)
+                          ? Navigator.pop(context)
+                          : Navigator.pushReplacementNamed(
+                              context,
+                              AppRoutes.main,
+                            ), // TODO: Paywall.didClose
+                    ),
                   ),
-                ),
-                onPressed: () => Navigator.canPop(context)
-                    ? Navigator.pop(context)
-                    : Navigator.pushReplacementNamed(
-                        context,
-                        AppRoutes.main,
-                      ), // TODO:
-              ),
-            ),
           ],
         ),
       ),

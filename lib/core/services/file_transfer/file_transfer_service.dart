@@ -5,7 +5,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../../../app.dart';
 import '../../core.dart';
 
 class FileTransferService extends ChangeNotifier {
@@ -15,7 +14,6 @@ class FileTransferService extends ChangeNotifier {
   // Зависимости
   final WebSocketServerService _webSocketServer = WebSocketServerService();
   final WebSocketClientService _webSocketClient = WebSocketClientService();
-  final MediaManagerService _mediaManager = MediaManagerService();
   final VideoConverterService _videoConverter = VideoConverterService();
   final GallerySaverService _gallerySaver = GallerySaverService();
   final FileTransferManager _transferManager = FileTransferManager();
@@ -50,9 +48,6 @@ class FileTransferService extends ChangeNotifier {
   Map<String, FileTransfer> get activeTransfers =>
       _transferManager.activeTransfers;
 
-  // Медиа
-  List<ReceivedMedia> get receivedMedia => _mediaManager.receivedMedia;
-
   // MARK: - УПРАВЛЕНИЕ КОЛБЭКАМИ
 
   void setOnSubscriptionRequiredCallback(VoidCallback callback) {
@@ -79,13 +74,12 @@ class FileTransferService extends ChangeNotifier {
       videoConverter: _videoConverter,
       transferManager: _transferManager,
       onProgressUpdated: () {
-        print('🔄 Сервис уведомляет UI о прогрессе');
+        // Уведомляем UI
         notifyListeners();
       },
     );
 
     _clientFileReceiver = ClientFileReceiverService(
-      mediaManager: _mediaManager,
       gallerySaver: _gallerySaver,
       transferManager: _transferManager,
       sendClientMessage: _sendClientMessage,
@@ -107,7 +101,6 @@ class FileTransferService extends ChangeNotifier {
     _transferManager.dispose();
     _webSocketServer.dispose();
     _videoConverter.dispose();
-    _mediaManager.dispose();
 
     stopServer();
     disconnect();
@@ -260,16 +253,16 @@ class FileTransferService extends ChangeNotifier {
         print('✅ Клиент готов принимать файл');
         break;
       case 'chunk_ack':
-        _handleChunkAckFromClient(socket, data);
+        _handleChunkAckFromClient(data);
         break;
       case 'file_received':
-        _handleFileReceivedFromClient(socket, data);
+        _handleFileReceivedFromClient(data);
         break;
       case 'progress_update':
-        _handleProgressUpdateFromClient(socket, data);
+        _handleProgressUpdateFromClient(data);
         break;
       case 'cancel_transfer':
-        _handleCancelTransferFromClient(socket, data);
+        _transferManager.handleRemoteCancellation(data);
         break;
     }
   }
@@ -313,10 +306,7 @@ class FileTransferService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _handleProgressUpdateFromClient(
-    WebSocket socket,
-    Map<String, dynamic> data,
-  ) {
+  void _handleProgressUpdateFromClient(Map<String, dynamic> data) {
     try {
       final transferId = data['transferId'] as String?;
       final progress = data['progress'] as double?;
@@ -343,18 +333,7 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  void _handleCancelTransferFromClient(
-    WebSocket socket,
-    Map<String, dynamic> data,
-  ) {
-    try {
-      _transferManager.handleRemoteCancellation(data);
-    } catch (e) {
-      print('❌ Ошибка обработки отмены от клиента: $e');
-    }
-  }
-
-  void _handleChunkAckFromClient(WebSocket socket, Map<String, dynamic> data) {
+  void _handleChunkAckFromClient(Map<String, dynamic> data) {
     final transferId = data['transferId'] as String?;
     final receivedBytes = data['receivedBytes'] as int?;
 
@@ -365,10 +344,7 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  void _handleFileReceivedFromClient(
-    WebSocket socket,
-    Map<String, dynamic> data,
-  ) {
+  void _handleFileReceivedFromClient(Map<String, dynamic> data) {
     final transferId = data['transferId'] as String?;
     final fileName = data['fileName'] as String?;
 
@@ -441,13 +417,5 @@ class FileTransferService extends ChangeNotifier {
     } catch (e) {
       print('❌ Ошибка открытия медиа: $e');
     }
-  }
-
-  Future<bool> deleteMedia(ReceivedMedia media) async {
-    return await _mediaManager.deleteMedia(media);
-  }
-
-  Future<void> refreshReceivedMedia() async {
-    await _mediaManager.refreshMedia();
   }
 }

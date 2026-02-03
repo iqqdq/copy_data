@@ -1,5 +1,25 @@
+import 'package:path_provider/path_provider.dart';
+
 class FileUtils {
   FileUtils._();
+
+  static Future<String> getTempDirectoryPath() async {
+    final dir = await getTemporaryDirectory();
+    return dir.path;
+  }
+
+  // Получаем директорию документов приложения
+  static Future<String> getAppDocumentsPath() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return dir.path;
+  }
+
+  // Создаем уникальное имя временного файла
+  static String generateTempFileName(String originalName) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final safeName = originalName.replaceAll(RegExp(r'[^\w\s.-]'), '_');
+    return 'temp_${timestamp}_$safeName';
+  }
 
   static String formatBytes(int bytes, {bool forceSameUnit = false}) {
     if (forceSameUnit) {

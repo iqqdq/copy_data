@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
+
 import '../../../core/core.dart';
+
 import 'progress_state.dart';
 
-typedef ShowToastCallback = void Function(String message);
+typedef ShowCancelSendingToastCallback = void Function(String message);
 typedef NavigateBackCallback = void Function();
 
 class ProgressController extends ChangeNotifier {
@@ -13,12 +15,12 @@ class ProgressController extends ChangeNotifier {
 
   // Проверка, все ли коллбэки установлены
   bool get isReady =>
-      _showToastCallback != null &&
+      _showCancelSendingToastCallback != null &&
       _navigateBackCallback != null &&
       _fileTransferService != null;
 
   // Коллбэки для UI
-  ShowToastCallback? _showToastCallback;
+  ShowCancelSendingToastCallback? _showCancelSendingToastCallback;
   NavigateBackCallback? _navigateBackCallback;
 
   // Коллбэк для запросов к FileTransferService
@@ -35,11 +37,11 @@ class ProgressController extends ChangeNotifier {
 
   // Установка коллбэков
   void setCallbacks({
-    required ShowToastCallback showToast,
+    required ShowCancelSendingToastCallback showToast,
     required NavigateBackCallback navigateBack,
     required FileTransferService service,
   }) {
-    _showToastCallback = showToast;
+    _showCancelSendingToastCallback = showToast;
     _navigateBackCallback = navigateBack;
     _fileTransferService = service;
   }
@@ -282,8 +284,8 @@ class ProgressController extends ChangeNotifier {
     }
 
     // Показываем тост через коллбэк
-    if (_showToastCallback != null) {
-      _showToastCallback!(message);
+    if (_showCancelSendingToastCallback != null) {
+      _showCancelSendingToastCallback!(message);
       hideCancellationToast();
     }
   }
@@ -307,7 +309,7 @@ class ProgressController extends ChangeNotifier {
   @override
   void dispose() {
     clearAll();
-    _showToastCallback = null;
+    _showCancelSendingToastCallback = null;
     _navigateBackCallback = null;
     _fileTransferService = null;
 

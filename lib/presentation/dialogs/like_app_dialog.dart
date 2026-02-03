@@ -6,7 +6,7 @@ import 'package:adaptive_dialog/adaptive_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
-import '../../app.dart';
+import '../../core/core.dart';
 
 class LikeAppDialog {
   static Future<void> show(BuildContext context) async {
@@ -33,7 +33,7 @@ class LikeAppDialog {
           okLabel: Platform.isIOS ? 'Go to the AppStore' : 'Go to Google Play',
         );
 
-        // launchUrlString(AppConstants.reviewUrl); // TODO:
+        launchUrlString(AppConstants.reviewUrl);
       }
     }
   }

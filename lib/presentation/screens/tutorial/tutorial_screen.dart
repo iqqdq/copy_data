@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../../core/core.dart';
 import '../../presentation.dart';
@@ -59,9 +60,10 @@ class TutorialScreen extends StatelessWidget {
                     highlighted: 'iOS / Android',
                     onPressed: () {
                       if (Platform.isIOS) {
-                        // TODO: OPEN STORE
-                        print('Open AppStore');
+                        // TODO: CHECK OPEN AppStore
+                        launchUrlString(AppConstants.shareUrl);
                       } else {
+                        // TODO: OPEN GOOGLE PLAY
                         print('Open GooglePlay');
                       }
                     },

@@ -6,16 +6,17 @@ import 'package:adaptive_dialog/adaptive_dialog.dart';
 class PremiumRequiredDialog {
   static Future<void> show(
     BuildContext context, {
+    required String title,
+    required String message,
     required VoidCallback onGetPermiumPressed,
   }) async {
     final result = await showOkCancelAlertDialog(
       context: context,
-      title: 'Premium Required',
-      message:
-          'Sending files to Android devices is available only with a Premium subscription',
+      title: title,
+      message: message,
       okLabel: 'Get Premium',
     );
 
-    if (result == OkCancelResult.ok) ;
+    if (result == OkCancelResult.ok) onGetPermiumPressed();
   }
 }

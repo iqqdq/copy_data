@@ -5,10 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../core/core.dart';
 
-final ValueNotifier<bool> isSubscribed = ValueNotifier(
-  Platform.isAndroid ? true : false,
-); // TODO: REPLACE
-
 class App extends StatelessWidget {
   const App({super.key});
 

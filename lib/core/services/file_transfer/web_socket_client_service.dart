@@ -14,13 +14,11 @@ class WebSocketClientService extends ChangeNotifier {
   WebSocketChannel? _clientChannel;
   String? _connectedServerIp;
   String? _connectedServerName;
-  String _connectionStatus = 'Отключено';
 
   // Getters
   WebSocketChannel? get clientChannel => _clientChannel;
   String? get connectedServerIp => _connectedServerIp;
   String? get connectedServerName => _connectedServerName;
-  String get connectionStatus => _connectionStatus;
   bool get isConnected => _clientChannel != null;
 
   // Колбэки для обработки сообщений
@@ -50,7 +48,6 @@ class WebSocketClientService extends ChangeNotifier {
 
       await disconnect();
 
-      _connectionStatus = 'Подключение...';
       notifyListeners();
 
       final uri = Uri.parse('ws://$serverIp:$port/ws');
@@ -80,7 +77,6 @@ class WebSocketClientService extends ChangeNotifier {
 
       await Future.delayed(Duration(seconds: 1));
 
-      _connectionStatus = 'Подключено к серверу';
       print('🎉 УСПЕШНО ПОДКЛЮЧЕНО!');
       notifyListeners();
     } catch (e) {
@@ -118,7 +114,6 @@ class WebSocketClientService extends ChangeNotifier {
 
   void _handleConnectionLost() {
     print('❌ Соединение с сервером разорвано');
-    _connectionStatus = 'Отключено от сервера';
     _clientChannel = null;
     _connectedServerIp = null;
 
@@ -131,7 +126,6 @@ class WebSocketClientService extends ChangeNotifier {
 
   void _handleConnectionError(String error) {
     print('⚠️ Ошибка соединения: $error');
-    _connectionStatus = 'Ошибка: ${error.split('\n').first}';
     _clientChannel = null;
     _connectedServerIp = null;
 
@@ -165,8 +159,6 @@ class WebSocketClientService extends ChangeNotifier {
 
       _connectedServerIp = null;
       _connectedServerName = null;
-      _connectionStatus = 'Отключено';
-
       notifyListeners();
     } catch (e) {
       print('❌ Ошибка отключения: $e');

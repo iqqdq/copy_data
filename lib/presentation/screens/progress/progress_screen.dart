@@ -114,10 +114,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
       listenable: _controller,
       builder: (context, _) {
         final state = _controller.state;
-        final activeTransfers = Provider.of<FileTransferService>(
-          context,
-          listen: true,
-        ).activeTransfers;
+
+        final activeTransfers = context
+            .watch<FileTransferService>()
+            .activeTransfers;
 
         final hasAnyTransferStarted = _controller.hasAnyTransferStarted();
         final areAllTransfersCompleteOrCancelled = _controller
@@ -162,7 +162,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
                     if (hadVideoTransfers)
                       Padding(
-                        padding: EdgeInsets.only(bottom: 16.0),
+                        padding: EdgeInsets.only(bottom: 24.0),
                         child: ProgressTile(
                           isPhoto: false,
                           isSending: state.isSending,
@@ -175,12 +175,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
                     if (areAllTransfersCompleteOrCancelled &&
                         allTransfers.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(top: 16.0, bottom: 24.0),
-                        child: CustomButton.primary(
-                          title: 'Go to main menu',
-                          onPressed: () => _controller.handleGoToMainMenu(),
-                        ),
+                      CustomButton.primary(
+                        title: 'Go to main menu',
+                        onPressed: () => _controller.handleGoToMainMenu(),
                       ),
                   ],
                 ),

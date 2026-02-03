@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
-import '../../../app.dart';
+
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -15,258 +14,147 @@ class SendScreen extends StatefulWidget {
 }
 
 class _SendScreenState extends State<SendScreen> {
-  int _selectedIndex = 0;
-  bool _autoSendTriggered = false;
-  bool _isConnecting = false;
-  bool _isConnected = false;
-  final Map<int, bool> _tabInitialized = {0: false, 1: false};
+  late SendController _controller;
 
   @override
   void initState() {
     super.initState();
+
+    _controller = SendController(
+      showPremiumDialog: (title, message, onGetPremiumPressed) async {
+        return PremiumRequiredDialog.show(
+          context,
+          title: title,
+          message: message,
+          onGetPermiumPressed: onGetPremiumPressed,
+        );
+      },
+      showToast: (message) {
+        CustomToast.showToast(context: context, message: message);
+      },
+      navigateTo: (route, {arguments}) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, route, arguments: arguments);
+        }
+      },
+      fileTransferServiceCallback: () {
+        return Provider.of<FileTransferService>(context, listen: false);
+      },
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startServer();
+      _controller.startServer();
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final service = Provider.of<FileTransferService>(context, listen: false);
-
-    // Проверяем подключение клиента
-    if (service.connectedClients.isNotEmpty) {
-      _handleClientConnected();
-    } else {
-      _handleClientDisconnected();
-    }
-
-    // Автоматическая отправка при первом подключении
-    if (service.connectedClients.isNotEmpty && !_autoSendTriggered) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _triggerAutoSend(service);
-      });
-    }
+    final service = Provider.of<FileTransferService>(context, listen: true);
+    if (mounted) _controller.checkConnectionStatus(service);
   }
 
-  Future<void> _startServer() async {
-    final service = Provider.of<FileTransferService>(context, listen: false);
-    if (!service.isServerRunning) await service.startServer();
-  }
-
-  Future<void> _handleClientConnected() async {
-    if (_isConnecting) return;
-
-    if (mounted) {
-      // Задержка 2 сек перед установкой флага подключения
-      setState(() => _isConnecting = true);
-      await Future.delayed(const Duration(seconds: 2));
-
-      // Задержка для показа флага подключения
-      setState(() => _isConnected = true);
-
-      // Открытие галереи
-      Future.delayed(const Duration(seconds: 2), () async {
-        setState(() {
-          _isConnecting = false;
-          _isConnected = false;
-        });
-
-        await _pickAndSendMedia();
-      });
-    }
-  }
-
-  void _handleClientDisconnected() {
-    setState(() {
-      _autoSendTriggered = false;
-      _isConnecting = false;
-    });
-  }
-
-  Future<void> _triggerAutoSend(FileTransferService service) async {
-    if (_isConnecting) return;
-
-    setState(() => _autoSendTriggered = true);
-    await Future.delayed(Duration(milliseconds: 500));
-    await _pickAndSendMedia();
-  }
-
-  Future<void> _pickAndSendMedia() async {
-    final service = Provider.of<FileTransferService>(context, listen: false);
-
-    try {
-      // Проверяем подписку для отправки с iOS на Android
-      if (_selectedIndex == 1 && !isSubscribed.value) {
-        PremiumRequiredDialog.show(
-          context,
-          onGetPermiumPressed: () {
-            Navigator.pushNamed(context, AppRoutes.paywall);
-          },
-        );
-
-        return;
-      }
-
-      // Если произошел разрыв соединения
-      if (service.connectedClients.isEmpty) {
-        return;
-      }
-
-      if (mounted && !isSubscribed.value) {
-        await OkDialog.show(
-          context,
-          title: 'Subscription Required',
-          message:
-              'To pick more than 10 files, you must have an active Premium subscription',
-        );
-      }
-
-      final pickedFiles = await ImagePicker().pickMultipleMedia(
-        limit: isSubscribed.value ? null : 10,
-      );
-
-      final files = <File>[];
-      for (final image in pickedFiles) {
-        files.add(File(image.path));
-      }
-
-      if (files.isNotEmpty) {
-        if (mounted) {
-          final bool isSending = true;
-          Navigator.pushReplacementNamed(
-            context,
-            AppRoutes.progress,
-            arguments: isSending,
-          );
-        }
-
-        await service.sendFilesToConnectedClient(files);
-      } else {
-        setState(() => _autoSendTriggered = false);
-      }
-    } catch (e) {
-      if (mounted) {
-        CustomToast.showToast(
-          context: context,
-          message: 'There was an error while sending files',
-        );
-      }
-
-      setState(() => _autoSendTriggered = false);
-    }
-  }
-
-  void _onTabSelected(int index) {
-    if (!_tabInitialized[index]!) {
-      setState(() {
-        _selectedIndex = index;
-        _tabInitialized[index] = true;
-      });
-    } else {
-      setState(() {
-        _selectedIndex = index;
-      });
-    }
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final service = Provider.of<FileTransferService>(context);
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) {
+        final state = _controller.state;
 
-    return Stack(
-      children: [
-        Scaffold(
-          appBar: CustomAppBar(title: 'Send file'),
-          body: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24.0),
-            child: Column(
-              children: [
-                CustomTabBar(
-                  tabs: ['Transfer to IOS', 'Transfer to Android'],
-                  selectedIndex: _selectedIndex,
-                  onTabSelected: _onTabSelected,
-                ),
-
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: Duration(milliseconds: 300),
-                    child: ListView(
-                      key: ValueKey<int>(_selectedIndex),
-                      padding: EdgeInsets.symmetric(
-                        vertical: 24.0,
-                      ).copyWith(bottom: MediaQuery.of(context).padding.bottom),
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+        return Stack(
+          children: [
+            Scaffold(
+              appBar: CustomAppBar(title: 'Send file'),
+              body: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  children: [
+                    CustomTabBar(
+                      tabs: ['Transfer to IOS', 'Transfer to Android'],
+                      selectedIndex: state.selectedIndex,
+                      onTabSelected: _controller.onTabSelected,
+                    ),
+                    Expanded(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: ListView(
+                          key: ValueKey<int>(state.selectedIndex),
+                          padding: EdgeInsets.symmetric(vertical: 24.0)
+                              .copyWith(
+                                bottom: MediaQuery.of(context).padding.bottom,
+                              ),
                           children: [
-                            Padding(
-                              padding: EdgeInsets.only(bottom: 16.0),
-                              child: Image.asset(
-                                'assets/images/send_file.png',
-                                width: 74.0,
-                                height: 74.0,
-                              ),
-                            ),
-
-                            Padding(
-                              padding: EdgeInsets.only(bottom: 8.0),
-                              child: Text(
-                                _selectedIndex == 0
-                                    ? 'Send file to IOS device'
-                                    : 'Send file to Android device',
-                                style: AppTypography.title20Medium,
-                              ),
-                            ),
-
-                            Padding(
-                              padding: EdgeInsets.only(bottom: 8.0),
-                              child:
-                                  'Tap Receive and scan the QR code on the sending device to get the files'
-                                      .toHighlightedText(
-                                        highlightedWords: ['Receive'],
-                                        style: AppTypography.body16Regular,
-                                      ),
-                            ),
-
-                            Center(
-                              child: Container(
-                                height: 250,
-                                width: 250,
-                                alignment: Alignment.center,
-                                child: QrImageView(
-                                  data: _selectedIndex == 0
-                                      ? 'ios_${service.localIp}:${FileTransferService.PORT}'
-                                      : 'android_${service.localIp}:${FileTransferService.PORT}',
-                                  version: QrVersions.auto,
-                                  backgroundColor: Colors.white,
-                                  size: 250,
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 16.0),
+                                  child: Image.asset(
+                                    'assets/images/send_file.png',
+                                    width: 74.0,
+                                    height: 74.0,
+                                  ),
                                 ),
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child: Text(
+                                    _controller.getTitleText(),
+                                    style: AppTypography.title20Medium,
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child:
+                                      'Tap Receive and scan the QR code on the sending device to get the files'
+                                          .toHighlightedText(
+                                            highlightedWords: ['Receive'],
+                                            style: AppTypography.body16Regular,
+                                          ),
+                                ),
+                                Center(
+                                  child: Container(
+                                    height: 250,
+                                    width: 250,
+                                    alignment: Alignment.center,
+                                    child: QrImageView(
+                                      data: _controller.getQrData(),
+                                      version: QrVersions.auto,
+                                      backgroundColor: Colors.white,
+                                      size: 250,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ).withDecoration(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24.0,
+                                vertical: 32.0,
                               ),
+                              color: AppColors.white,
+                              borderRadius: BorderRadius.circular(32.0),
+                              borderWidth: 3.0,
+                              borderColor: AppColors.black,
                             ),
                           ],
-                        ).withDecoration(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24.0,
-                            vertical: 32.0,
-                          ),
-                          color: AppColors.white,
-                          borderRadius: BorderRadius.circular(32.0),
-                          borderWidth: 3.0,
-                          borderColor: AppColors.black,
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-
-        // При подключении клиента
-        if (_isConnecting) ConnectionStatusAlert(isConnecting: !_isConnected),
-      ],
+            // При подключении клиента
+            if (state.isConnecting)
+              ConnectionStatusAlert(isConnecting: !state.isConnected),
+          ],
+        );
+      },
     );
   }
 }
