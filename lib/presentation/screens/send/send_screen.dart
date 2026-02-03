@@ -32,7 +32,7 @@ class _SendScreenState extends State<SendScreen> {
       showToast: (message) {
         CustomToast.showToast(context: context, message: message);
       },
-      navigateTo: (route, {arguments}) {
+      navigateTo: (route, {arguments}) async {
         if (mounted) {
           Navigator.pushReplacementNamed(context, route, arguments: arguments);
         }

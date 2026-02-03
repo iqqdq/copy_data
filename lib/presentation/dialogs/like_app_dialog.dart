@@ -3,17 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:adaptive_dialog/adaptive_dialog.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../core/core.dart';
 
 class LikeAppDialog {
   static Future<void> show(BuildContext context) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final isAppLiked = prefs.getBool('is_app_liked') ?? false;
+    final appSettings = AppSettingsService.instance;
 
-    if (context.mounted && isSubscribed.value && !isAppLiked) {
+    if (context.mounted && isSubscribed.value && !appSettings.isAppLiked) {
       final result = await showOkCancelAlertDialog(
         context: context,
         title: 'Do you like the app?',
@@ -23,7 +21,7 @@ class LikeAppDialog {
         barrierDismissible: false,
       );
 
-      await prefs.setBool('is_app_liked', true);
+      await appSettings.likeApp();
 
       if (context.mounted && result == OkCancelResult.ok) {
         await showOkAlertDialog(

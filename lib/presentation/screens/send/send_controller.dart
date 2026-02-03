@@ -154,36 +154,30 @@ class SendController extends ChangeNotifier {
         return;
       }
 
-      // Если произошел разрыв соединения
-      if (service.connectedClients.isEmpty) return;
+      // Проверяем подписку на недельный лимит файлов
+      late List<XFile> pickedFiles;
 
-      // Проверяем подписку на лимит файлов для iOS
+      if (!isSubscribed.value) {
+        final appSettings = AppSettingsService.instance;
+        final remainingFileTransfers = appSettings.remainingFileTransfers;
 
-      // if (!isSubscribed.value) { // TODO: DELETE?
-      //   await showPremiumDialog(
-      //     'Free limit reached',
-      //     'You can only send up to 10 files per week for free',
-      //     () => navigateTo(AppRoutes.paywall),
-      //   );
-      // }
+        if (remainingFileTransfers == 0) {
+          // Если достигунт недельный лимит файлов для передачи показываем пэйволл
+          navigateTo(AppRoutes.paywall);
+          return;
+        } else {
+          // Иначе даем пользователю выбрать файлы
+          pickedFiles = await ImagePicker().pickMultipleMedia();
+          // Затем показываем пэйволл
+          await navigateTo(AppRoutes.paywall);
 
-      // TODO: SHOW PAYWALL IF LIMIT REACHED
-      // if (!isSubscribed.value) {
-      // navigateTo(AppRoutes.paywall);
-      // }
-
-      // if (!isSubscribed.value) {
-      //   return;
-      // }
-
-      final pickedFiles = await ImagePicker().pickMultipleMedia();
-
-      // TODO: SHOW PAYWALL IF LIMIT NOT REACHED
-      // navigateTo(AppRoutes.paywall);
-
-      // if (!isSubscribed.value) {
-      //   10 FILE'S;
-      // } else {
+          // Если пользователь не подписался - обрезаем кол-во выбранных файлов до недельного лимита
+          // Максимальное кол-во в неделю - 10 файлов
+          if (!isSubscribed.value) {
+            pickedFiles = pickedFiles.take(remainingFileTransfers).toList();
+          }
+        }
+      }
 
       final files = <File>[];
       for (final image in pickedFiles) {
@@ -192,7 +186,6 @@ class SendController extends ChangeNotifier {
 
       if (files.isNotEmpty) {
         navigateTo(AppRoutes.progress, arguments: true);
-
         await service.sendFilesToConnectedClient(files);
       } else {
         setAutoSendTriggered(false);

@@ -25,7 +25,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
       showOkDialog: (title, message) async {
         return OkDialog.show(context, title: title, message: message);
       },
-      navigateTo: (route, {arguments}) {
+      navigateTo: (route, {arguments}) async {
         if (mounted) {
           Navigator.pushReplacementNamed(context, route, arguments: arguments);
         }

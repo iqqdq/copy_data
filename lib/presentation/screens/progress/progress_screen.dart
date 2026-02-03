@@ -62,6 +62,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
         _controller.hideCancellationToast();
       });
     }
+
+    // Показываем диалог оценки приложения после первой передачи/приема файлов
+    // LikeAppDialog.show(context); TODO: ДОБВИТЬ КОЛЛБЭК ПОСЛЕ ТРАНСФЕРА
+
+    // Увеличиваем кол-во переданных файлов
+    if (widget.isSending) {
+      // await appSettings.increaseTransferFiles(); // TODO: ОБНОВИТЬ СЧЕТЧИК ТРАНСФЕРОВ ТОЛЬКО ЕСЛИ МЫ - СЕРВЕР
+    }
   }
 
   @override

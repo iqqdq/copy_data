@@ -3,24 +3,22 @@ import 'package:flutter/material.dart';
 import '../../presentation/presentation.dart';
 
 abstract class AppRoutes {
-  static String get splash => '/';
-  static String get onboard => '/onboard';
-  static String get paywall => '/paywall';
-  static String get main => '/main';
-  static String get receive => '/receive';
-  static String get scanner => '/scanner';
-  static String get send => '/send';
-  static String get progress => '/progress';
-  static String get settings => '/settings';
-  static String get subscriptionPlans => '/subscription_plans';
-  static String get tutorial => '/tutorial';
+  static const String onboard = '/onboard';
+  static const String paywall = '/paywall';
+  static const String main = '/main';
+  static const String receive = '/receive';
+  static const String scanner = '/scanner';
+  static const String send = '/send';
+  static const String progress = '/progress';
+  static const String settings = '/settings';
+  static const String subscriptionPlans = '/subscription_plans';
+  static const String tutorial = '/tutorial';
 }
 
 abstract class AppNavigation {
-  static final initialRoute = AppRoutes.splash;
+  static const String initialRoute = AppRoutes.onboard;
 
   static final routes = <String, Widget Function(BuildContext)>{
-    AppRoutes.splash: (_) => const SplashScreen(),
     AppRoutes.main: (_) => const MainScreen(),
     AppRoutes.receive: (_) => const ReceiveScreen(),
     AppRoutes.scanner: (_) => const ScannerScreen(),
@@ -31,26 +29,23 @@ abstract class AppNavigation {
   };
 
   static Route? onGenerateRoute(RouteSettings settings) {
-    if (settings.name == AppRoutes.onboard) {
-      return PageRouteBuilder(
-        pageBuilder: (context, _, _) => const OnboardScreen(),
-        transitionDuration: Duration.zero,
-      );
+    switch (settings.name) {
+      case AppRoutes.onboard:
+        return PageRouteBuilder(
+          pageBuilder: (context, _, _) => const OnboardScreen(),
+          transitionDuration: Duration.zero,
+        );
+      case AppRoutes.paywall:
+        return MaterialPageRoute(
+          builder: (_) => const PaywallScreen(),
+          fullscreenDialog: true,
+        );
+      case AppRoutes.progress:
+        return MaterialPageRoute(
+          builder: (_) => ProgressScreen(isSending: settings.arguments as bool),
+        );
+      default:
+        return null;
     }
-
-    if (settings.name == AppRoutes.paywall) {
-      return MaterialPageRoute(
-        builder: (_) => const PaywallScreen(),
-        fullscreenDialog: true,
-      );
-    }
-
-    if (settings.name == AppRoutes.progress) {
-      return MaterialPageRoute(
-        builder: (_) => ProgressScreen(isSending: settings.arguments as bool),
-      );
-    }
-
-    return null;
   }
 }

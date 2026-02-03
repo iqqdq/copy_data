@@ -25,6 +25,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
               padding: EdgeInsets.symmetric(horizontal: 24.0),
               child: Column(
                 children: [
+                  // TODO: CHECK
                   Expanded(
                     child: Center(
                       child: Image.asset(

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:in_app_review/in_app_review.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/core.dart';
@@ -24,7 +25,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _showPermissionAlert = false;
 
   // Текущий индекс разрешения для запроса
-  int _currentPermissionIndex = 0;
+  int _currentPermissionIndex = Platform.isAndroid ? 1 : 0;
   // Для отслеживания процесса запроса конкретного разрешения
   bool _isRequestingPermission = false;
 
@@ -33,9 +34,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // Запускаем проверку разрешений при инициализации
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkPermissions();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _showRateAppDialog();
+      await _checkPermissions();
     });
   }
 
@@ -131,6 +132,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _showRateAppDialog() async {
+    if (AppSettingsService.instance.isAppRated) {
+      if (Platform.isIOS && await InAppReview.instance.isAvailable()) {
+        await InAppReview.instance.requestReview();
+      }
+    }
+  }
+
   Future<void> _checkPermissions() async {
     await Future.delayed(Duration(milliseconds: 300));
 
@@ -189,7 +198,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           }
         } catch (e) {
           print('⚠️ Не удалось проверить WiFi разрешение: $e');
-          newStates.add(false);
+          newStates.add(true);
         }
       }
 
@@ -245,7 +254,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           print('📡 Запрашиваю Network разрешение...');
           permissionGranted = await _requestNetworkPermission();
           break;
-
         case 1: // Photos & Videos
           print('🖼 Запрашиваю доступ к медиа...');
           permissionGranted = await _requestMediaPermission();
