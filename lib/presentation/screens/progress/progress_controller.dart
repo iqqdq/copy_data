@@ -67,7 +67,7 @@ class ProgressController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearAll() {
+  void _clearAll() {
     _state = _state.copyWith(
       cancelledTransfers: {},
       transferHistory: {},
@@ -223,7 +223,7 @@ class ProgressController extends ChangeNotifier {
 
   @override
   void dispose() {
-    clearAll();
+    _clearAll();
     super.dispose();
   }
 }

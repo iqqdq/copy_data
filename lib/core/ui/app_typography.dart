@@ -50,4 +50,9 @@ abstract class AppTypography {
     fontFamily: fontFamily,
     fontSize: 12.0,
   );
+
+  static final link10Regular = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 10.0,
+  );
 }
