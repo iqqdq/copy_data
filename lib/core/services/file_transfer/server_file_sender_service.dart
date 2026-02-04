@@ -357,14 +357,12 @@ class ServerFileSenderService {
       final progressBeforeThisFile =
           (totalBytesSent.toDouble() / totalGroupSize.toDouble()) * 100.0;
 
-      final conversionWeight = isVideoGroup ? 40.0 : 0.0;
-      final transferWeight = isVideoGroup ? 60.0 : 100.0;
+      // УБИРАЕМ КОНВЕРТАЦИЮ ВИДЕО - отправляем оригинальные файлы
+      if (isVideoGroup) {
+        // Просто логируем что это видео файл
+        print('🎥 Подготовка видео файла ${i + 1}: $fileName');
 
-      if (isVideoGroup &&
-          mimeType.startsWith('video/') &&
-          _videoConverter.isMovFile(file)) {
-        print('🎬 Конвертация .mov в .mp4 на сервере...');
-
+        // НЕ конвертируем, используем оригинальный файл
         final fileTransferId = '${groupTransferId}_$i';
         final currentFileSize = fileSize;
 
@@ -375,19 +373,19 @@ class ServerFileSenderService {
           'fileSize': currentFileSize,
           'fileType': mimeType,
           'timestamp': DateTime.now().toIso8601String(),
-          'isConverting': true,
+          'isConverting': false, // Указываем что не конвертируем
         };
 
         socket.add(jsonEncode(metadata));
         await Future.delayed(Duration(milliseconds: 100));
 
         if (_transferManager.getTransfer(groupTransferId) == null) {
-          print('⚠️ Передача отменена перед конвертацией');
+          print('⚠️ Передача отменена перед отправкой видео');
           isCancelled = true;
           break;
         }
 
-        // Прогресс на начало конвертации
+        // Прогресс на начало передачи видео
         _sendProgressUpdate(
           socket,
           groupTransferId,
@@ -396,62 +394,8 @@ class ServerFileSenderService {
           totalGroupSize,
           sendToClient,
         );
-
-        final convertedFile = await _videoConverter.convertMovToMp4(file, (
-          conversionProgress,
-        ) {
-          if (_transferManager.getTransfer(groupTransferId) == null) {
-            print('⚠️ Передача отменена во время конвертации');
-            isCancelled = true;
-            return;
-          }
-
-          final conversionShareInGroup =
-              (conversionProgress / 100.0) *
-              conversionWeight *
-              fileShare /
-              100.0;
-
-          final groupProgress =
-              progressBeforeThisFile + (conversionShareInGroup * 100.0);
-
-          final clampedProgress = groupProgress.clamp(0.0, 100.0);
-
-          final bytesForProgress = (clampedProgress / 100.0 * totalGroupSize)
-              .toInt();
-
-          // Обновляем прогресс
-          transfer.updateProgress(bytesForProgress);
-
-          // Уведомляем FileTransferService
-          onProgressUpdated.call();
-
-          _sendProgressUpdate(
-            socket,
-            groupTransferId,
-            clampedProgress,
-            transfer.receivedBytes,
-            totalGroupSize,
-            sendToClient,
-          );
-
-          print(
-            '🔄 Прогресс видео ${i + 1}: конвертация ${conversionProgress.toStringAsFixed(1)}%, '
-            'общий прогресс: ${clampedProgress.toStringAsFixed(1)}%',
-          );
-        });
-
-        if (convertedFile != null) {
-          fileToSend = convertedFile;
-          fileType = 'video/mp4';
-        }
-
-        if (_transferManager.getTransfer(groupTransferId) == null) {
-          print('⚠️ Передача отменена после конвертации');
-          isCancelled = true;
-          break;
-        }
       } else {
+        // Для фото просто отправляем прогресс
         _sendProgressUpdate(
           socket,
           groupTransferId,
@@ -468,8 +412,7 @@ class ServerFileSenderService {
         break;
       }
 
-      final progressBeforeTransfer =
-          progressBeforeThisFile + (conversionWeight * fileShare);
+      final progressBeforeTransfer = progressBeforeThisFile;
       final clampedProgressBeforeTransfer = progressBeforeTransfer.clamp(
         0.0,
         100.0,
@@ -537,8 +480,7 @@ class ServerFileSenderService {
           final fileTransferProgress =
               fileSentBytes.toDouble() / currentFileSize.toDouble();
 
-          final transferShareInGroup =
-              fileTransferProgress * transferWeight * fileShare / 100.0;
+          final transferShareInGroup = fileTransferProgress * fileShare;
 
           final groupProgress =
               progressBeforeTransfer + (transferShareInGroup * 100.0);
@@ -549,7 +491,10 @@ class ServerFileSenderService {
               (clampedGroupProgress / 100.0 * totalGroupSize).toInt();
           transfer.updateProgress(bytesForGroupProgress);
 
-          if (chunkIndex % 2 == 0 || fileSentBytes == currentFileSize) {
+          // Для видео отправляем прогресс чаще (каждый чанк)
+          if (isVideoGroup ||
+              chunkIndex % 2 == 0 ||
+              fileSentBytes == currentFileSize) {
             _sendProgressUpdate(
               socket,
               groupTransferId,
@@ -605,7 +550,6 @@ class ServerFileSenderService {
         sendToClient,
       );
 
-      // ВАЖНОЕ ИЗМЕНЕНИЕ: Ждем подтверждения сохранения от клиента
       print('⏳ Жду подтверждения сохранения файла ${i + 1} от клиента...');
 
       try {
@@ -614,9 +558,13 @@ class ServerFileSenderService {
         final completer = Completer<bool>();
         _fileSaveCompleters[completerKey] = completer;
 
-        // Ждем подтверждения с таймаутом
+        // Увеличиваем таймаут для видео: 60 секунд вместо 30
+        final timeoutDuration = isVideoGroup
+            ? Duration(seconds: 60)
+            : Duration(seconds: 30);
+
         final confirmed = await completer.future.timeout(
-          Duration(seconds: 30),
+          timeoutDuration,
           onTimeout: () {
             print('⚠️ Таймаут ожидания подтверждения для файла ${i + 1}');
             return false;
@@ -632,8 +580,12 @@ class ServerFileSenderService {
         print('⚠️ Ошибка ожидания подтверждения: $e');
       }
 
-      // Пауза между файлами (особенно важно для видео)
-      await Future.delayed(Duration(milliseconds: isVideoGroup ? 1000 : 500));
+      // Увеличиваем паузу между видео файлами
+      final pauseDuration = isVideoGroup
+          ? Duration(milliseconds: 2000) // 2 секунды для видео
+          : Duration(milliseconds: 500); // 0.5 секунды для фото
+
+      await Future.delayed(pauseDuration);
 
       print(
         '✅ ${isVideoGroup ? 'Видео' : 'Фото'} ${i + 1}/${files.length} отправлено с сервера '
@@ -641,7 +593,7 @@ class ServerFileSenderService {
         '${clampedExactProgress.toStringAsFixed(1)}%)',
       );
 
-      // Удаляем временный файл
+      // Удаляем временный файл только если он был создан конвертером
       if (fileToSend.path != file.path && await fileToSend.exists()) {
         try {
           await fileToSend.delete();
@@ -664,7 +616,7 @@ class ServerFileSenderService {
     } else {
       // Ждем подтверждения для всех файлов
       print('⏳ Ожидаю финальных подтверждений сохранения...');
-      await Future.delayed(Duration(seconds: 2));
+      await Future.delayed(Duration(seconds: isVideoGroup ? 5 : 2));
 
       // Завершаем прогресс группы - ТОЧНО 100%
       transfer.updateProgress(totalGroupSize);

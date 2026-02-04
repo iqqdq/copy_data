@@ -12,6 +12,9 @@ class ClientFileReceiverService {
   // Для отслеживания индексов файлов в группе
   final Map<String, int> _currentFileIndices = {};
   final Map<String, List<String>> _receivedFiles = {};
+  final Map<String, int> _savedFilesCount = {}; // Счетчик сохраненных файлов
+  final Map<String, Completer<void>> _groupCompleters =
+      {}; // Для ожидания завершения группы
 
   ClientFileReceiverService({
     required GallerySaverService gallerySaver,
@@ -34,6 +37,8 @@ class ClientFileReceiverService {
         // Сбрасываем индекс для новой группы
         _currentFileIndices[transferId] = 0;
         _receivedFiles[transferId] = [];
+        _savedFilesCount[transferId] = 0;
+        _groupCompleters[transferId] = Completer<void>();
 
         // Создаем передачу для группы
         final transfer = FileTransfer(
@@ -46,11 +51,15 @@ class ClientFileReceiverService {
           onProgress: (progress) {
             // UI обновится через notifyListeners
           },
-          onComplete: (file) {
+          onComplete: (file) async {
             print('✅ Группа завершена: $transferId');
+            // Ждем завершения всех файлов
+            await _groupCompleters[transferId]?.future;
+            print('🎉 Все файлы в группе $transferId обработаны');
           },
           onError: (error) {
             print('❌ Ошибка в группе: $error');
+            _groupCompleters[transferId]?.completeError(error);
           },
           sendMessage: sendClientMessage,
           totalFiles: totalFiles,
@@ -109,6 +118,8 @@ class ClientFileReceiverService {
           },
           onError: (error) {
             print('❌ Ошибка получения файла: $error');
+            // Даже при ошибке увеличиваем индекс
+            _currentFileIndices[groupTransferId] = currentIndex + 1;
           },
         );
 
@@ -167,6 +178,24 @@ class ClientFileReceiverService {
       if (saveResult.isSaved) {
         print('✅ Файл сохранен в галерею: $fileName');
 
+        // ОБНОВЛЯЕМ СЧЕТЧИК НА КЛИЕНТЕ
+        final transfer = _transferManager.getTransfer(groupTransferId);
+        if (transfer != null) {
+          // Увеличиваем счетчик сохраненных файлов
+          final currentCount = _savedFilesCount[groupTransferId] ?? 0;
+          _savedFilesCount[groupTransferId] = currentCount + 1;
+
+          // Обновляем счетчик в transfer
+          transfer.completedFiles = _savedFilesCount[groupTransferId]!;
+
+          print(
+            '📊 Обновлен счетчик файлов: ${transfer.completedFiles}/${transfer.totalFiles}',
+          );
+
+          // Уведомляем UI
+          _transferManager.notifyListeners();
+        }
+
         // Отправляем подтверждение на сервер
         await sendClientMessage({
           'type': 'file_saved',
@@ -176,32 +205,6 @@ class ClientFileReceiverService {
           'success': true,
           'timestamp': DateTime.now().toIso8601String(),
         });
-
-        // Обновляем индекс для следующего файла
-        _currentFileIndices[groupTransferId] = fileIndex + 1;
-
-        // Сохраняем информацию о полученном файле
-        _receivedFiles[groupTransferId]?.add(fileName);
-
-        // Обновляем счетчик в transfer
-        final transfer = _transferManager.getTransfer(groupTransferId);
-        if (transfer != null) {
-          // completedFiles теперь обновляется на сервере по подтверждениям
-          // Но мы можем обновить локально для UI
-          final currentCompleted =
-              (_receivedFiles[groupTransferId]?.length ?? 0);
-          print(
-            '📊 Локальный счетчик файлов: $currentCompleted/${transfer.totalFiles}',
-          );
-
-          // Отправляем сообщение о получении файла
-          await sendClientMessage({
-            'type': 'file_received',
-            'transferId': groupTransferId,
-            'fileName': fileName,
-            'timestamp': DateTime.now().toIso8601String(),
-          });
-        }
       } else {
         print('❌ Не удалось сохранить файл в галерею: $fileName');
         await sendClientMessage({
@@ -213,6 +216,30 @@ class ClientFileReceiverService {
           'error': saveResult.errorMessage,
           'timestamp': DateTime.now().toIso8601String(),
         });
+      }
+
+      // Обновляем индекс для следующего файла
+      _currentFileIndices[groupTransferId] = fileIndex + 1;
+
+      // Сохраняем информацию о полученном файле
+      _receivedFiles[groupTransferId]?.add(fileName);
+
+      // Отправляем сообщение о получении файла
+      await sendClientMessage({
+        'type': 'file_received',
+        'transferId': groupTransferId,
+        'fileName': fileName,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      // Проверяем, все ли файлы в группе обработаны
+      final totalFiles =
+          _transferManager.getTransfer(groupTransferId)?.totalFiles ?? 0;
+      final savedFiles = _savedFilesCount[groupTransferId] ?? 0;
+
+      if (savedFiles >= totalFiles) {
+        print('🎉 Все $totalFiles файлов в группе $groupTransferId обработаны');
+        _groupCompleters[groupTransferId]?.complete();
       }
     } catch (e) {
       print('❌ Ошибка при сохранении файла в галерею: $e');
