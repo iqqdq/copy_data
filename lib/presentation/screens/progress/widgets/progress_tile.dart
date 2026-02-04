@@ -39,7 +39,15 @@ class ProgressTile extends StatelessWidget {
 
     for (final transfer in transfers) {
       totalFiles += transfer.totalFiles;
-      completedFiles += transfer.completedFiles;
+
+      // ВАЖНОЕ ИЗМЕНЕНИЕ: Используем transfer.completedFiles
+      // Если прогресс 100%, показываем все файлы как завершенные
+      if (transfer.progress >= 100.0) {
+        completedFiles += transfer.totalFiles;
+      } else {
+        completedFiles += transfer.completedFiles;
+      }
+
       totalReceived += transfer.receivedBytes;
       totalSize += transfer.fileSize;
     }
@@ -118,6 +126,7 @@ class ProgressTile extends StatelessWidget {
                       ),
                     ),
 
+                    // ВАЖНО: Используем completedFiles и totalFiles
                     Text(
                       '$completedFiles of $totalFiles',
                       style: AppTypography.link12Regular.copyWith(

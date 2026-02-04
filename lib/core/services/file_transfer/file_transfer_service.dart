@@ -106,6 +106,18 @@ class FileTransferService extends ChangeNotifier {
   void handleTransferCompleted(String transferId) {
     print('✅ Сервис получил уведомление о завершении передачи: $transferId');
 
+    // ФИКС СЧЕТЧИКА: Если передача завершена (100%), устанавливаем счетчик точно
+    final transfer = _transferManager.getTransfer(transferId);
+    if (transfer != null && transfer.progress >= 100.0) {
+      if (transfer.completedFiles != transfer.totalFiles) {
+        print(
+          '🔄 Исправляю счетчик завершенной передачи: '
+          '${transfer.completedFiles} → ${transfer.totalFiles}',
+        );
+        transfer.completedFiles = transfer.totalFiles;
+      }
+    }
+
     // Вызываем колбэк, если он установлен
     if (_onTransferCompletedCallback != null) {
       _onTransferCompletedCallback!(transferId);

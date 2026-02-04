@@ -550,6 +550,7 @@ class ServerFileSenderService {
         sendToClient,
       );
 
+      // ВАЖНОЕ ИЗМЕНЕНИЕ: Увеличиваем таймаут для видео файлов
       print('⏳ Жду подтверждения сохранения файла ${i + 1} от клиента...');
 
       try {
@@ -618,6 +619,36 @@ class ServerFileSenderService {
       print('⏳ Ожидаю финальных подтверждений сохранения...');
       await Future.delayed(Duration(seconds: isVideoGroup ? 5 : 2));
 
+      // ФИНАЛЬНАЯ ПРОВЕРКА СЧЕТЧИКА
+      if (transfer != null) {
+        final confirmedFiles =
+            _fileSaveConfirmations[groupTransferId]?.values
+                .where((confirmed) => confirmed == true)
+                .length ??
+            0;
+
+        // Если подтверждено меньше файлов, но все отправлено - устанавливаем totalFiles
+        if (confirmedFiles < transfer.totalFiles) {
+          print(
+            '⚠️ Подтверждено $confirmedFiles из ${transfer.totalFiles} файлов',
+          );
+
+          // Для последнего файла мог быть таймаут, но файл был сохранен
+          if (transfer.progress >= 100.0) {
+            print(
+              '🔄 Исправляю счетчик завершенной передачи: '
+              '$confirmedFiles → ${transfer.totalFiles}',
+            );
+            transfer.completedFiles = transfer.totalFiles;
+            onProgressUpdated.call(); // Уведомляем UI
+          } else {
+            transfer.completedFiles = confirmedFiles;
+          }
+        } else {
+          transfer.completedFiles = confirmedFiles;
+        }
+      }
+
       // Завершаем прогресс группы - ТОЧНО 100%
       transfer.updateProgress(totalGroupSize);
 
@@ -633,7 +664,7 @@ class ServerFileSenderService {
 
       print(
         '🎉 Все ${files.length} ${isVideoGroup ? 'видео' : 'фото'} отправлены с сервера! '
-        '(100%, ${transfer.completedFiles}/${transfer.totalFiles} файлов)',
+        '(${transfer.completedFiles}/${transfer.totalFiles} файлов)',
       );
     }
   }

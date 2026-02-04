@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:typed_data';
-
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:path/path.dart' as path;
 
@@ -13,16 +12,6 @@ class GallerySaverService {
     try {
       print('💾 Сохранение в галерею: ${file.path}');
       print('📝 Имя файла: $originalName');
-      print('📱 MIME тип: $mimeType');
-
-      // Проверяем существование файла
-      if (!await file.exists()) {
-        print('❌ Файл не существует для сохранения: ${file.path}');
-        return GallerySaveResult(
-          isSaved: false,
-          errorMessage: 'File does not exist',
-        );
-      }
 
       bool isSaved = false;
       String? savedPath;
@@ -147,13 +136,8 @@ class GallerySaverService {
     String originalName,
   ) async {
     try {
-      print('🎥 Размер видео файла: ${await file.length()} байт');
-
-      // Для iOS: проверяем расширение .mov и пробуем альтернативный подход
-      if (Platform.isIOS && originalName.toLowerCase().endsWith('.mov')) {
-        print('⚠️ iOS: Обнаружен MOV файл, используем специальный метод');
-        return await _saveMovVideoIOS(file, originalName);
-      }
+      print('🎥 Сохранение видео: $originalName');
+      print('📊 Размер видео файла: ${await file.length()} байт');
 
       if (Platform.isIOS) {
         return await _saveVideoIOS(file, originalName);
@@ -163,49 +147,6 @@ class GallerySaverService {
     } catch (e) {
       print('❌ Ошибка при сохранении видео: $e');
       return GallerySaveResult(isSaved: false, errorMessage: e.toString());
-    }
-  }
-
-  Future<GallerySaveResult> _saveMovVideoIOS(
-    File file,
-    String originalName,
-  ) async {
-    try {
-      // Пробуем сохранить как файл с измененным расширением
-      final newName = originalName
-          .replaceAll('.mov', '.mp4')
-          .replaceAll('.MOV', '.mp4');
-      print('🔄 Переименовываем .mov в .mp4 для iOS: $newName');
-
-      final result = await ImageGallerySaverPlus.saveFile(
-        file.path,
-        name: newName,
-        isReturnPathOfIOS: true,
-      );
-
-      print('📱 Результат сохранения MOV видео на iOS: $result');
-
-      if (result is Map) {
-        final success = result['isSuccess'] as bool? ?? false;
-        final filePath = result['filePath'] as String?;
-        if (success) {
-          print('✅ MOV видео сохранено в галерею iOS: $newName');
-          if (filePath != null) {
-            print('📁 Путь: $filePath');
-          }
-          return GallerySaveResult(isSaved: true, savedPath: filePath);
-        } else {
-          print('❌ Ошибка при сохранении MOV видео на iOS');
-          // Пробуем стандартный метод как fallback
-          return await _saveVideoIOS(file, originalName);
-        }
-      }
-
-      return GallerySaveResult(isSaved: false);
-    } catch (e) {
-      print('❌ Ошибка при сохранении MOV видео: $e');
-      // Пробуем стандартный метод как fallback
-      return await _saveVideoIOS(file, originalName);
     }
   }
 
