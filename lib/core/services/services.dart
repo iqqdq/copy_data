@@ -1,4 +1,3 @@
-export 'device_discovery.dart';
-export 'file_transfer_service.dart';
-export 'websocket_client.dart';
-export 'websocket_server.dart';
+export 'file_transfer/file_transfer.dart';
+export 'app_settings_service.dart';
+export 'purchase_service.dart';

@@ -1,4 +1,4 @@
-name: file_sharing
+name: copy_data
 description: "A new Flutter project."
 
 publish_to: 'none'
@@ -14,26 +14,33 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
-  local_websocket: ^0.0.4
-  path_provider: ^2.1.5
-  permission_handler: ^12.0.1
-
-  file_picker: ^10.3.8
-  mime: ^2.0.0
-  crypto: ^3.0.7
-  open_file: ^3.5.11
+  shared_preferences: ^2.5.4
+  flutter_svg: ^2.2.3
   url_launcher: ^6.3.2
+  adaptive_dialog: ^2.6.0
+  icons_launcher: ^3.0.3
+  flutter_native_splash: ^2.4.7
+  in_app_review: ^2.0.11
 
   provider: ^6.1.5
-  qr_flutter: ^4.1.0
-  flutter_secure_storage: ^10.0.0
 
   network_info_plus: ^7.0.0
   connectivity_plus: ^7.0.0
+  web_socket_channel: ^3.0.3
 
-  flutter_localizations:
-    sdk: flutter
-  intl: 0.20.2
+  device_info_plus: ^12.3.0
+  permission_handler: ^12.0.1
+
+  qr_flutter: ^4.1.0
+  qr_code_scanner_plus: ^2.0.14
+
+  path_provider: ^2.1.5
+  image_gallery_saver_plus: ^4.0.1
+  image_picker: ^1.2.1
+  image: ^4.7.2
+  mime: ^2.0.0
+
+  ffmpeg_kit_flutter_new: ^4.1.0
   path: ^1.9.1
 
 dev_dependencies:
@@ -44,3 +51,38 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - ios/
+
+  fonts:
+    - family: Morn
+      fonts:
+        - asset: assets/fonts/morn-light.ttf
+          weight: 300
+        - asset: assets/fonts/morn-regular.ttf
+          weight: 400
+        - asset: assets/fonts/morn-medium.ttf
+          weight: 500
+
+flutter_native_splash:
+  color: "#ffffff"
+  image: assets/images/splash.png
+  ios_content_mode: "center"
+  android_gravity: center
+
+  android_12:
+    image: assets/images/splash.png
+    color: "#ffffff"
+
+  web: false
+
+icons_launcher:
+  image_path: "assets/app_icon.png"
+  platforms:
+    android:
+      enable: true
+    ios:
+      enable: true

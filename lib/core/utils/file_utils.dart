@@ -1,58 +1,102 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:crypto/crypto.dart';
-import 'package:mime/mime.dart';
-import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
-import '../core.dart';
-
 class FileUtils {
-  static Future<FileInfo> createFileInfo(File file) async {
-    final stats = await file.stat();
-    final bytes = await file.readAsBytes();
+  FileUtils._();
 
-    return FileInfo(
-      id: _generateFileId(file.path),
-      name: path.basename(file.path),
-      path: file.path,
-      size: await file.length(),
-      hash: md5.convert(bytes).toString(),
-      mimeType: lookupMimeType(file.path) ?? 'application/octet-stream',
-      modifiedDate: stats.modified,
-    );
+  static Future<String> getTempDirectoryPath() async {
+    final dir = await getTemporaryDirectory();
+    return dir.path;
   }
 
-  static String _generateFileId(String filePath) {
+  // Получаем директорию документов приложения
+  static Future<String> getAppDocumentsPath() async {
+    final dir = await getApplicationDocumentsDirectory();
+    return dir.path;
+  }
+
+  // Создаем уникальное имя временного файла
+  static String generateTempFileName(String originalName) {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final hash = md5.convert(utf8.encode(filePath)).toString();
-    return '${timestamp}_$hash';
+    final safeName = originalName.replaceAll(RegExp(r'[^\w\s.-]'), '_');
+    return 'temp_${timestamp}_$safeName';
   }
 
-  static String getFileIcon(String mimeType) {
-    if (mimeType.startsWith('image/')) return '🖼️';
-    if (mimeType.startsWith('video/')) return '🎬';
-    if (mimeType.startsWith('audio/')) return '🎵';
-    if (mimeType.contains('pdf')) return '📄';
-    if (mimeType.contains('word') || mimeType.contains('document')) return '📝';
-    if (mimeType.contains('excel') || mimeType.contains('sheet')) return '📊';
-    if (mimeType.contains('zip') || mimeType.contains('rar')) return '📦';
-    return '📁';
-  }
-
-  static Future<Directory> getDownloadDirectory() async {
-    if (Platform.isAndroid) {
-      return Directory('/storage/emulated/0/Download');
-    } else if (Platform.isIOS) {
-      return await getApplicationDocumentsDirectory();
+  static String formatBytes(int bytes, {bool forceSameUnit = false}) {
+    if (forceSameUnit) {
+      // Принудительно используем MB для всех значений > 1MB
+      if (bytes >= 1024 * 1024) {
+        return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+      }
+      // Для значений < 1MB используем KB
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
     }
-    return await getDownloadsDirectory() ?? Directory.current;
+
+    // Оригинальная логика
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
   }
 
-  static bool isSupportedFile(String path) {
-    final extension = path.split('.').last.toLowerCase();
-    final unsupported = ['exe', 'bat', 'cmd', 'sh', 'apk', 'ipa'];
-    return !unsupported.contains(extension);
+  static String calculateProgress(
+    int bytes,
+    int totalBytes, {
+    bool showBoth = true,
+  }) {
+    // Определяем единицу измерения на основе общего размера
+    String unit;
+    double bytesValue;
+    double totalValue;
+
+    if (totalBytes >= 1024 * 1024) {
+      unit = 'MB';
+      bytesValue = bytes / (1024 * 1024);
+      totalValue = totalBytes / (1024 * 1024);
+    } else if (totalBytes >= 1024) {
+      unit = 'KB';
+      bytesValue = bytes / 1024;
+      totalValue = totalBytes / 1024;
+    } else {
+      unit = 'B';
+      bytesValue = bytes.toDouble();
+      totalValue = totalBytes.toDouble();
+    }
+
+    // Форматируем значения с точностью
+    final formattedBytes = _formatValue(bytesValue, unit);
+    final formattedTotal = _formatValue(totalValue, unit);
+
+    if (showBoth) {
+      return '$formattedBytes / $formattedTotal';
+    } else {
+      return formattedTotal;
+    }
+  }
+
+  static String _formatValue(double value, String unit) {
+    if (unit == 'B') {
+      // Для байтов показываем целое число
+      return '${value.toInt()} $unit';
+    } else {
+      // Для KB и MB показываем 2 знака после запятой
+      return '${value.toStringAsFixed(2)} $unit';
+    }
+  }
+
+  // Дополнительные утилиты для работы с файлами
+  static String getFileSizeString(int bytes) {
+    if (bytes >= 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+    } else if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    } else if (bytes >= 1024) {
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    } else {
+      return '$bytes B';
+    }
   }
 }

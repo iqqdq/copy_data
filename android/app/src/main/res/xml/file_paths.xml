@@ -1,8 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <external-path name="external_files" path="." />
+    <!-- Internal files directory -->
     <files-path name="files" path="." />
+
+    <!-- Cache directory -->
     <cache-path name="cache" path="." />
+
+    <!-- External files directory -->
     <external-files-path name="external_files" path="." />
+
+    <!-- External cache directory -->
     <external-cache-path name="external_cache" path="." />
+
+    <!-- External storage (для старых версий Android) -->
+    <external-path name="external_storage" path="." />
+
+    <!-- Download directory (только для чтения на Android 10+) -->
+    <external-path name="downloads" path="Download" />
+
+    <!-- Pictures directory -->
+    <external-path name="pictures" path="Pictures" />
+
+    <!-- Movies directory -->
+    <external-path name="movies" path="Movies" />
+
+    <!-- Music directory -->
+    <external-path name="music" path="Music" />
+
+    <!-- DCIM directory -->
+    <external-path name="dcim" path="DCIM" />
 </paths>

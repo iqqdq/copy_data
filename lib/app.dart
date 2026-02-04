@@ -1,6 +1,9 @@
+import 'dart:io';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import 'presentation/presentation.dart';
+import '../core/core.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -10,15 +13,16 @@ class App extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        appBarTheme: AppBarTheme(
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
+        scaffoldBackgroundColor: AppColors.white,
+        colorScheme: ColorScheme.light(
+          primary: Platform.isIOS
+              ? CupertinoColors.systemBlue
+              : AppColors.green,
         ),
       ),
-      darkTheme: ThemeData.dark(),
-      home: RoleSelectionScreen(),
+      initialRoute: AppNavigation.initialRoute,
+      onGenerateRoute: AppNavigation.onGenerateRoute,
+      routes: AppNavigation.routes,
     );
   }
 }
