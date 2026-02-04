@@ -17,7 +17,10 @@ abstract class AppRoutes {
 }
 
 abstract class AppNavigation {
-  static final String initialRoute = isSubscribed.value
+  static final String initialRoute =
+      !AppSettingsService.instance.isOnboardSkipped
+      ? AppRoutes.onboard
+      : isSubscribed.value
       ? AppRoutes.main
       : AppRoutes.paywall;
 

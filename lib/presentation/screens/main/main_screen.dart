@@ -19,15 +19,12 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
-  bool _isCheckingPermissions = false;
-
   List<bool> _permissionStates = [false, false, false];
+  bool _isCheckingPermissions = false;
   bool _showPermissionAlert = false;
-
-  // Текущий индекс разрешения для запроса
-  int _currentPermissionIndex = Platform.isAndroid ? 1 : 0;
-  // Для отслеживания процесса запроса конкретного разрешения
+  bool _allPermissionsGranted = false;
   bool _isRequestingPermission = false;
+  int _currentPermissionIndex = Platform.isAndroid ? 1 : 0;
 
   @override
   void initState() {
@@ -40,8 +37,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         await Navigator.pushNamed(context, AppRoutes.tutorial);
       }
 
-      await _showRateAppDialog();
       await _checkPermissions();
+      await _showRateAppDialog();
     });
   }
 
@@ -53,10 +50,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Проверяем разрешения, когда приложение возвращается из фона
-    if (state == AppLifecycleState.resumed) {
-      _checkPermissions();
-    }
+    if (state == AppLifecycleState.resumed) _checkPermissions();
   }
 
   @override
@@ -97,14 +91,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ),
         ),
 
-        // Показываем PermissionAlert если есть неподтвержденные разрешения
         if (_showPermissionAlert)
           PermissionAlert(
             permissionStates: _permissionStates,
             currentPermissionIndex: _currentPermissionIndex,
-            onNextPressed: _requestNextPermission,
-            onNotNowPressed: () => setState(() => _showPermissionAlert = false),
             isRequestingPermission: _isRequestingPermission,
+            allPermissionsGranted: _allPermissionsGranted,
+            onNextPressed: _requestNextPermission,
+            onNotNowPressed: () {
+              setState(() {
+                _showPermissionAlert = false;
+                _allPermissionsGranted = false;
+              });
+            },
           ),
       ],
     );
@@ -119,16 +118,24 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     if (!allGranted) {
       // Если не все разрешения получены, показываем алерт
-      // Находим первое неподтвержденный разрешение
       int firstDeniedIndex = _permissionStates.indexWhere((state) => !state);
       setState(() {
         _currentPermissionIndex = firstDeniedIndex;
         _showPermissionAlert = true;
+        _allPermissionsGranted = false; // Сбрасываем флаг
       });
       return;
     }
 
-    // Если все разрешения получены, переходим к экрану
+    // Проверяем, был ли нажат Next после получения всех разрешений
+    if (_showPermissionAlert && _allPermissionsGranted) {
+      // Если алерт еще показывается, но все разрешения получены,
+      // значит пользователь еще не нажал "Next" - ничего не делаем
+      print('⚠️ Все разрешения получены, но алерт еще не закрыт');
+      return;
+    }
+
+    // Если все разрешения получены И алерт закрыт, переходим к экрану
     if (mounted) {
       Navigator.pushNamed(
         context,
@@ -230,11 +237,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         _isCheckingPermissions = false;
 
         // Проверяем, все ли разрешения получены
-        bool allGranted = _permissionStates.every((state) => state);
-        _showPermissionAlert = !allGranted;
+        _allPermissionsGranted = _permissionStates.every((state) => state);
+        _showPermissionAlert = !_allPermissionsGranted;
 
         // Если есть неподтвержденные разрешения, находим первое
-        if (!allGranted) {
+        if (!_allPermissionsGranted) {
           _currentPermissionIndex = _permissionStates.indexWhere(
             (state) => !state,
           );
@@ -265,7 +272,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           print('🖼 Запрашиваю доступ к медиа...');
           permissionGranted = await _requestMediaPermission();
           break;
-
         case 2: // Camera
           print('📸 Запрашиваю доступ к камере...');
           permissionGranted = await _requestCameraPermission();
@@ -279,53 +285,53 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       setState(() {
         _permissionStates = updatedStates;
         _isRequestingPermission = false;
+
+        // Проверяем, все ли разрешения теперь получены
+        _allPermissionsGranted = _permissionStates.every((state) => state);
       });
 
-      // Проверяем статус разрешения
+      // Если разрешение не получено, показываем индивидуальный алерт
       if (!permissionGranted) {
-        // Если разрешение не получено, показываем индивидуальный алерт
         _showIndividualPermissionDialog(_currentPermissionIndex);
+
+        // Находим следующее неподтвержденное разрешение
+        int nextDeniedIndex = _permissionStates.indexWhere((state) => !state);
+
+        if (nextDeniedIndex != -1) {
+          setState(() {
+            _currentPermissionIndex = nextDeniedIndex;
+          });
+        }
+
+        return;
       }
 
       // Находим следующее неподтвержденное разрешение
       int nextDeniedIndex = _permissionStates.indexWhere((state) => !state);
 
       if (nextDeniedIndex != -1) {
-        // Есть еще неподтвержденные разрешения
+        // Есть еще неподтвержденные разрешения - переходим к следующему
         setState(() {
           _currentPermissionIndex = nextDeniedIndex;
+          _allPermissionsGranted = false;
         });
       } else {
         // Все разрешения получены
-        setState(() {
-          _showPermissionAlert = false;
-        });
-        print('✅ Все разрешения получены!');
+        setState(() => _allPermissionsGranted = true);
       }
-    } catch (e, stackTrace) {
+    } catch (e, _) {
       print('❌ Ошибка при запросе разрешения: $e');
-      print('Stack: $stackTrace');
-      setState(() {
-        _isRequestingPermission = false;
-      });
+      setState(() => _isRequestingPermission = false);
     }
   }
 
   Future<bool> _requestNetworkPermission() async {
     if (Platform.isIOS) {
-      // Для iOS: пытаемся инициировать сетевой запрос
       try {
         final connectivity = Connectivity();
         final connectivityResult = await connectivity.checkConnectivity();
         final hasWifi = connectivityResult.contains(ConnectivityResult.wifi);
-
-        if (hasWifi) {
-          // На iOS не можем программно запросить, просто возвращаем true
-          // так как пользователь должен включить в настройках
-          return true;
-        } else {
-          return false;
-        }
+        return hasWifi;
       } catch (e) {
         print('📡 iOS: Ошибка при проверке сети: $e');
         return false;

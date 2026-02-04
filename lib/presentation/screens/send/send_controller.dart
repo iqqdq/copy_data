@@ -157,7 +157,6 @@ class SendController extends ChangeNotifier {
         return;
       }
 
-      // TODO: CHECK
       // Проверяем подписку на недельный лимит файлов
       late List<XFile> pickedFiles;
 
@@ -196,6 +195,7 @@ class SendController extends ChangeNotifier {
       if (files.isNotEmpty) {
         navigateTo(AppRoutes.progress, arguments: true);
         await service.sendFilesToConnectedClient(files);
+        return;
       } else {
         setAutoSendTriggered(false);
       }

@@ -71,6 +71,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
       // TODO: Paywall.didClose
     }
 
-    Navigator.pushReplacementNamed(context, AppRoutes.main);
+    Navigator.canPop(context)
+        ? Navigator.pop(context)
+        : Navigator.pushReplacementNamed(context, AppRoutes.main);
   }
 }

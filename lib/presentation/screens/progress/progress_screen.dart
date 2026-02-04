@@ -27,7 +27,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
         }
       },
       showLikeAppDialog: () {
-        // TODO: CHECK
         if (mounted) {
           LikeAppDialog.show(context);
         }
@@ -147,10 +146,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       CustomButton.primary(
                         title: 'Go to main menu',
                         onPressed: () async {
-                          state.isSending
-                              ? await _controller.service.stopServer()
-                              : await _controller.service
-                                    .clearClientTransfers();
+                          await _controller.service.clearClientTransfers();
+
+                          if (state.isSending) {
+                            await _controller.service.stopServer();
+                          }
+
                           if (context.mounted) Navigator.pop(context);
                         },
                       ),
