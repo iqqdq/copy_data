@@ -1,10 +1,6 @@
-// ignore_for_file: constant_identifier_names
-
 import 'dart:async';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
-
 import '../../core.dart';
 
 class FileTransferService extends ChangeNotifier {
@@ -22,10 +18,16 @@ class FileTransferService extends ChangeNotifier {
   late ServerFileSenderService _serverFileSender;
 
   // UI состояние
-
   bool _shouldShowSubscriptionDialog = false;
 
-  // Колбэки
+  // MARK: - Колбэки для завершения передач
+
+  VoidCallback? _onAllTransfersCompletedCallback;
+  void Function(List<String> transferIds)? _onClearCompletedTransfersCallback;
+  void Function(String transferId)? _onTransferCompletedCallback;
+
+  // MARK: - Колбэки об отсутсвии подписки
+
   VoidCallback? _onSubscriptionRequired;
   void Function(String message)? _onRemoteCancellationCallback;
 
@@ -63,7 +65,106 @@ class FileTransferService extends ChangeNotifier {
     _transferManager.setRemoteCancellationCallback(callback);
   }
 
-  // MARK: - ИНИЦИАЛИЗАЦИЯ И ОЧИСТКА
+  // MARK: -  КОЛБЭКИ ДЛЯ ЗАВЕРШЕНИЯ ПЕРЕДАЧ
+
+  void setAllTransfersCompletedCallback(VoidCallback callback) {
+    _onAllTransfersCompletedCallback = callback;
+  }
+
+  void setTransferCompletedCallback(void Function(String transferId) callback) {
+    _onTransferCompletedCallback = callback;
+  }
+
+  void setClearCompletedTransfersCallback(
+    void Function(List<String> transferIds) callback,
+  ) {
+    _onClearCompletedTransfersCallback = callback;
+  }
+
+  void removeAllCallbacks() {
+    _onAllTransfersCompletedCallback = null;
+    _onTransferCompletedCallback = null;
+    _onClearCompletedTransfersCallback = null;
+    _onSubscriptionRequired = null;
+    _onRemoteCancellationCallback = null;
+  }
+
+  // MARK: - МЕТОДЫ ДЛЯ УВЕДОМЛЕНИЯ О ЗАВЕРШЕНИИ
+
+  void handleAllTransfersCompleted() {
+    print('🎯 Сервис получил уведомление о завершении всех передач');
+
+    // Вызываем колбэк, если он установлен
+    if (_onAllTransfersCompletedCallback != null) {
+      _onAllTransfersCompletedCallback!();
+    }
+
+    // Можно выполнить дополнительные действия:
+    _performCleanupAfterAllTransfersCompleted();
+  }
+
+  void handleTransferCompleted(String transferId) {
+    print('✅ Сервис получил уведомление о завершении передачи: $transferId');
+
+    // Вызываем колбэк, если он установлен
+    if (_onTransferCompletedCallback != null) {
+      _onTransferCompletedCallback!(transferId);
+    }
+
+    // Проверяем, все ли передачи завершены
+    _checkIfAllTransfersCompleted();
+  }
+
+  void clearCompletedTransfers(List<String> transferIds) {
+    // Удаляем передачи из активных
+    for (final transferId in transferIds) {
+      _transferManager.removeTransfer(transferId);
+    }
+
+    notifyListeners();
+
+    if (_onClearCompletedTransfersCallback != null) {
+      _onClearCompletedTransfersCallback!(transferIds);
+    }
+  }
+
+  void _checkIfAllTransfersCompleted() {
+    final activeTransfers = _transferManager.activeTransfers;
+
+    if (activeTransfers.isEmpty) return;
+
+    bool allCompleted = true;
+    bool hasAtLeastOneSuccess = false;
+
+    for (final transfer in activeTransfers.values) {
+      final isCompleted = transfer.progress >= 100.0;
+
+      if (!isCompleted) {
+        allCompleted = false;
+        break;
+      } else {
+        hasAtLeastOneSuccess = true;
+      }
+    }
+
+    if (allCompleted && hasAtLeastOneSuccess) {
+      print('🎉 Все активные передачи завершены!');
+      handleAllTransfersCompleted();
+    }
+  }
+
+  void _performCleanupAfterAllTransfersCompleted() {
+    // 1. Закрываем все file receivers
+    _transferManager.closeAllFileReceivers();
+
+    // 2. Очищаем конвертер видео
+    _videoConverter.dispose();
+
+    // 3. Оповещаем UI
+    notifyListeners();
+  }
+
+  // MARK: - ИНИЦИАЛИЗАЦИЯ
 
   FileTransferService() {
     _initialize();
@@ -76,6 +177,8 @@ class FileTransferService extends ChangeNotifier {
       onProgressUpdated: () {
         // Уведомляем UI
         notifyListeners();
+        // Проверяем завершение передач
+        _checkIfAllTransfersCompleted();
       },
     );
 
@@ -94,17 +197,17 @@ class FileTransferService extends ChangeNotifier {
         _onRemoteCancellationCallback!(message);
       }
     });
+
+    // Мониторинг завершения передач в transferManager
+    _setupTransferCompletionMonitoring();
   }
 
-  @override
-  void dispose() {
-    _transferManager.dispose();
-    _webSocketServer.dispose();
-    _videoConverter.dispose();
-
-    stopServer();
-    disconnect();
-    super.dispose();
+  void _setupTransferCompletionMonitoring() {
+    // Добавляем слушатель изменений в transferManager
+    _transferManager.addListener(() {
+      // При любом изменении в transferManager проверяем завершение передач
+      _checkIfAllTransfersCompleted();
+    });
   }
 
   // MARK: - СЕРВЕРНЫЕ МЕТОДЫ
@@ -117,9 +220,8 @@ class FileTransferService extends ChangeNotifier {
 
       await _webSocketServer.startServer();
       notifyListeners();
-    } catch (e, stackTrace) {
-      print('💥 ОШИБКА ЗАПУСКА СЕРВЕРА: $e');
-      print('Stack: $stackTrace');
+    } catch (e, _) {
+      print('💥 Ошибка запуска сервера: $e');
       notifyListeners();
       rethrow;
     }
@@ -166,6 +268,7 @@ class FileTransferService extends ChangeNotifier {
       print('❌ Ошибка остановки сервера: $e');
     }
   }
+
   // MARK: - ОТПРАВКА ФАЙЛОВ С СЕРВЕРА
 
   Future<void> sendFilesToClient(
@@ -210,7 +313,6 @@ class FileTransferService extends ChangeNotifier {
         'clientInfo': {
           'name': await DeviceUtils.getDeviceName(),
           'platform': Platform.operatingSystem,
-          'version': '1.0.0',
         },
         'timestamp': DateTime.now().toIso8601String(),
       };
@@ -283,6 +385,11 @@ class FileTransferService extends ChangeNotifier {
         break;
       case 'file_received':
         _handleFileReceivedFromClient(data);
+        // Уведомляем о завершении передачи файла
+        final transferId = data['transferId'] as String?;
+        if (transferId != null) {
+          handleTransferCompleted(transferId);
+        }
         break;
       case 'progress_update':
         _handleProgressUpdateFromClient(data);
@@ -290,6 +397,25 @@ class FileTransferService extends ChangeNotifier {
       case 'cancel_transfer':
         _transferManager.handleRemoteCancellation(data);
         break;
+      case 'transfer_completed':
+        // Новый тип сообщения - уведомление о завершении передачи
+        final transferId = data['transferId'] as String?;
+        if (transferId != null) {
+          handleTransferCompleted(transferId);
+        }
+        break;
+      case 'file_saved': // ДОБАВЛЯЕМ ОБРАБОТКУ ПОДТВЕРЖДЕНИЯ СОХРАНЕНИЯ
+        _handleFileSavedFromClient(data);
+        break;
+    }
+  }
+
+  void _handleFileSavedFromClient(Map<String, dynamic> data) {
+    try {
+      print('✅ Получено подтверждение сохранения файла от клиента');
+      _serverFileSender.handleFileSavedConfirmation(data);
+    } catch (e) {
+      print('❌ Ошибка обработки подтверждения сохранения: $e');
     }
   }
 
@@ -352,6 +478,11 @@ class FileTransferService extends ChangeNotifier {
         if (transfer != null) {
           transfer.updateProgress(receivedBytes);
           notifyListeners();
+
+          // Проверяем, завершена ли передача
+          if (progress >= 100.0) {
+            handleTransferCompleted(transferId);
+          }
         }
       }
     } catch (e) {
@@ -376,6 +507,21 @@ class FileTransferService extends ChangeNotifier {
 
     if (transferId != null && fileName != null) {
       print('🎉 Клиент подтвердил получение файла: $fileName');
+
+      // Можно отправить подтверждение о завершении передачи
+      try {
+        final client = _webSocketServer.connectedClients.firstOrNull;
+        if (client != null) {
+          _webSocketServer.sendToClient(client, {
+            'type': 'transfer_completed',
+            'transferId': transferId,
+            'fileName': fileName,
+            'timestamp': DateTime.now().toIso8601String(),
+          });
+        }
+      } catch (e) {
+        print('⚠️ Ошибка отправки подтверждения завершения: $e');
+      }
     }
   }
 
@@ -410,6 +556,12 @@ class FileTransferService extends ChangeNotifier {
       case 'cancel_transfer':
         _transferManager.handleRemoteCancellation(data);
         break;
+      case 'transfer_completed':
+        final transferId = data['transferId'] as String?;
+        if (transferId != null) {
+          handleTransferCompleted(transferId);
+        }
+        break;
     }
   }
 
@@ -430,8 +582,8 @@ class FileTransferService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _sendClientMessage(Map<String, dynamic> message) {
-    _webSocketClient.sendMessage(message);
+  Future<void> _sendClientMessage(Map<String, dynamic> message) async {
+    await _webSocketClient.sendMessage(message);
   }
 
   // MARK: - УПРАВЛЕНИЕ МЕДИА
@@ -443,5 +595,45 @@ class FileTransferService extends ChangeNotifier {
     } catch (e) {
       print('❌ Ошибка открытия медиа: $e');
     }
+  }
+
+  // MARK: - ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+
+  bool areAllTransfersCompleted() {
+    final activeTransfers = _transferManager.activeTransfers;
+
+    if (activeTransfers.isEmpty) return false;
+
+    for (final transfer in activeTransfers.values) {
+      if (transfer.progress < 100.0) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  List<FileTransfer> getCompletedTransfers() {
+    return _transferManager.activeTransfers.values
+        .where((transfer) => transfer.progress >= 100.0)
+        .toList();
+  }
+
+  List<FileTransfer> getInProgressTransfers() {
+    return _transferManager.activeTransfers.values
+        .where((transfer) => transfer.progress < 100.0 && transfer.progress > 0)
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    removeAllCallbacks();
+    _transferManager.dispose();
+    _webSocketServer.dispose();
+    _videoConverter.dispose();
+
+    stopServer();
+    disconnect();
+    super.dispose();
   }
 }

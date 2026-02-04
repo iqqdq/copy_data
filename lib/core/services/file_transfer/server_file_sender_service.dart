@@ -13,6 +13,10 @@ class ServerFileSenderService {
   final FileTransferManager _transferManager;
   final VoidCallback onProgressUpdated;
 
+  // Храним подтверждения сохранения файлов
+  final Map<String, Completer<bool>> _fileSaveCompleters = {};
+  final Map<String, Map<int, bool>> _fileSaveConfirmations = {};
+
   ServerFileSenderService({
     required VideoConverterService videoConverter,
     required FileTransferManager transferManager,
@@ -29,6 +33,8 @@ class ServerFileSenderService {
 
     // Очищаем старые передачи перед началом новых
     _transferManager.clearAllTransfers();
+    _fileSaveCompleters.clear();
+    _fileSaveConfirmations.clear();
 
     // Создаем отдельные передачи для фото и видео
     final photoFiles = files.where((file) {
@@ -49,6 +55,7 @@ class ServerFileSenderService {
         client,
         sendToClient,
       );
+      _fileSaveConfirmations[photoTransferId] = {};
     }
 
     // Создаем передачи для видео
@@ -59,6 +66,7 @@ class ServerFileSenderService {
         client,
         sendToClient,
       );
+      _fileSaveConfirmations[videoTransferId] = {};
     }
 
     // Отправляем файлы группами
@@ -217,6 +225,53 @@ class ServerFileSenderService {
     return videoTransferId;
   }
 
+  // Обработка подтверждения сохранения файла
+  void handleFileSavedConfirmation(Map<String, dynamic> data) {
+    try {
+      final transferId = data['transferId'] as String?;
+      final fileIndex = data['fileIndex'] as int?;
+      final success = data['success'] as bool? ?? false;
+
+      if (transferId != null && fileIndex != null) {
+        print(
+          '✅ Получено подтверждение сохранения файла: $transferId, индекс: $fileIndex',
+        );
+
+        // Сохраняем подтверждение
+        _fileSaveConfirmations[transferId]?[fileIndex] = success;
+
+        // Разрешаем Completer если он есть
+        final completerKey = '$transferId-$fileIndex';
+        final completer = _fileSaveCompleters[completerKey];
+        if (completer != null && !completer.isCompleted) {
+          completer.complete(success);
+          _fileSaveCompleters.remove(completerKey);
+        }
+
+        // Обновляем счетчик в transfer
+        final transfer = _transferManager.getTransfer(transferId);
+        if (transfer != null && success) {
+          // Считаем количество подтвержденных файлов
+          final confirmedFiles =
+              _fileSaveConfirmations[transferId]?.values
+                  .where((confirmed) => confirmed == true)
+                  .length ??
+              0;
+
+          transfer.completedFiles = confirmedFiles;
+          print(
+            '📊 Обновлен счетчик файлов: $confirmedFiles/${transfer.totalFiles}',
+          );
+
+          // Уведомляем UI
+          onProgressUpdated.call();
+        }
+      }
+    } catch (e) {
+      print('❌ Ошибка обработки подтверждения сохранения: $e');
+    }
+  }
+
   Future<void> _sendFileGroup(
     List<File> files,
     WebSocket socket,
@@ -249,7 +304,7 @@ class ServerFileSenderService {
     };
 
     sendToClient(socket, groupMetadata);
-    await Future.delayed(Duration(milliseconds: 100));
+    await Future.delayed(Duration(milliseconds: 200)); // Пауза для обработки
 
     int totalBytesSent = 0;
     final int totalGroupSize = transfer.fileSize;
@@ -451,7 +506,7 @@ class ServerFileSenderService {
       };
 
       socket.add(jsonEncode(metadata));
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(Duration(milliseconds: 100)); // Пауза для клиента
 
       // Открываем поток с проверкой отмены
       final stream = fileToSend.openRead();
@@ -550,7 +605,35 @@ class ServerFileSenderService {
         sendToClient,
       );
 
-      transfer.completedFiles++;
+      // ВАЖНОЕ ИЗМЕНЕНИЕ: Ждем подтверждения сохранения от клиента
+      print('⏳ Жду подтверждения сохранения файла ${i + 1} от клиента...');
+
+      try {
+        // Создаем Completer для ожидания подтверждения
+        final completerKey = '$groupTransferId-$i';
+        final completer = Completer<bool>();
+        _fileSaveCompleters[completerKey] = completer;
+
+        // Ждем подтверждения с таймаутом
+        final confirmed = await completer.future.timeout(
+          Duration(seconds: 30),
+          onTimeout: () {
+            print('⚠️ Таймаут ожидания подтверждения для файла ${i + 1}');
+            return false;
+          },
+        );
+
+        if (confirmed) {
+          print('✅ Клиент подтвердил сохранение файла ${i + 1}');
+        } else {
+          print('⚠️ Клиент не подтвердил сохранение файла ${i + 1}');
+        }
+      } catch (e) {
+        print('⚠️ Ошибка ожидания подтверждения: $e');
+      }
+
+      // Пауза между файлами (особенно важно для видео)
+      await Future.delayed(Duration(milliseconds: isVideoGroup ? 1000 : 500));
 
       print(
         '✅ ${isVideoGroup ? 'Видео' : 'Фото'} ${i + 1}/${files.length} отправлено с сервера '
@@ -579,6 +662,10 @@ class ServerFileSenderService {
       print('🛑 Отправка отменена пользователем');
       transfer.onError('Передача отменена');
     } else {
+      // Ждем подтверждения для всех файлов
+      print('⏳ Ожидаю финальных подтверждений сохранения...');
+      await Future.delayed(Duration(seconds: 2));
+
       // Завершаем прогресс группы - ТОЧНО 100%
       transfer.updateProgress(totalGroupSize);
 
