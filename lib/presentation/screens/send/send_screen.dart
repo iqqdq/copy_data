@@ -14,31 +14,36 @@ class SendScreen extends StatefulWidget {
 }
 
 class _SendScreenState extends State<SendScreen> {
-  late SendController _controller;
+  late final SendController _controller;
 
   @override
   void initState() {
     super.initState();
 
     _controller = SendController(
+      service: Provider.of<FileTransferService>(context, listen: false),
+      showToast: (message) =>
+          CustomToast.showToast(context: context, message: message),
       showPremiumDialog: (title, message, onGetPremiumPressed) async {
-        return PremiumRequiredDialog.show(
-          context,
-          title: title,
-          message: message,
-          onGetPermiumPressed: onGetPremiumPressed,
-        );
-      },
-      showToast: (message) {
-        CustomToast.showToast(context: context, message: message);
+        if (mounted) {
+          return PremiumRequiredDialog.show(
+            context,
+            title: title,
+            message: message,
+            onGetPermiumPressed: onGetPremiumPressed,
+          );
+        }
       },
       navigateTo: (route, {arguments}) async {
         if (mounted) {
-          Navigator.pushReplacementNamed(context, route, arguments: arguments);
+          route == AppRoutes.paywall
+              ? await Navigator.pushNamed(context, route)
+              : Navigator.pushReplacementNamed(
+                  context,
+                  route,
+                  arguments: arguments,
+                );
         }
-      },
-      fileTransferServiceCallback: () {
-        return Provider.of<FileTransferService>(context, listen: false);
       },
     );
 
@@ -70,7 +75,13 @@ class _SendScreenState extends State<SendScreen> {
         return Stack(
           children: [
             Scaffold(
-              appBar: CustomAppBar(title: 'Send file'),
+              appBar: CustomAppBar(
+                title: 'Send file',
+                onBackPressed: () async {
+                  await _controller.service.stopServer();
+                  if (context.mounted) Navigator.pop(context);
+                },
+              ),
               body: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Column(
@@ -80,6 +91,7 @@ class _SendScreenState extends State<SendScreen> {
                       selectedIndex: state.selectedIndex,
                       onTabSelected: _controller.onTabSelected,
                     ),
+
                     Expanded(
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
@@ -101,13 +113,15 @@ class _SendScreenState extends State<SendScreen> {
                                     height: 74.0,
                                   ),
                                 ),
+
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 8.0),
                                   child: Text(
-                                    _controller.getTitleText(),
+                                    _controller.title,
                                     style: AppTypography.title20Medium,
                                   ),
                                 ),
+
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 8.0),
                                   child:
@@ -117,13 +131,14 @@ class _SendScreenState extends State<SendScreen> {
                                             style: AppTypography.body16Regular,
                                           ),
                                 ),
+
                                 Center(
                                   child: Container(
                                     height: 250,
                                     width: 250,
                                     alignment: Alignment.center,
                                     child: QrImageView(
-                                      data: _controller.getQrData(),
+                                      data: _controller.getQrData,
                                       version: QrVersions.auto,
                                       backgroundColor: Colors.white,
                                       size: 250,

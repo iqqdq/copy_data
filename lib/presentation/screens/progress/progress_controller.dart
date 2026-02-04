@@ -1,50 +1,48 @@
-import 'package:copy_data/presentation/presentation.dart';
 import 'package:flutter/foundation.dart';
-
 import '../../../core/core.dart';
-
 import 'progress_state.dart';
-
-typedef ShowCancelSendingToastCallback = void Function(String message);
-typedef NavigateBackCallback = void Function();
 
 class ProgressController extends ChangeNotifier {
   final bool isSending;
-  ProgressState _state;
+  final ShowToastCallback showToast;
+  final ShowLikeAppDialogCallback showLikeAppDialog;
+  final FileTransferService service;
 
+  ProgressState _state;
   ProgressState get state => _state;
 
-  // Проверка, все ли коллбэки установлены
-  bool get isReady =>
-      _showCancelSendingToastCallback != null &&
-      _navigateBackCallback != null &&
-      _fileTransferService != null;
+  ProgressController({
+    required this.isSending,
+    required this.showToast,
+    required this.showLikeAppDialog,
+    required this.service,
+  }) : _state = ProgressState(
+         isSending: isSending,
+         cancelledTransfers: {},
+         transferHistory: {},
+       ) {
+    // Колбэк для уведомления UI об отмене с другой стороны
+    _setupRemoteCancellationCallback();
+  }
 
-  // Коллбэки для UI
-  ShowCancelSendingToastCallback? _showCancelSendingToastCallback;
-  NavigateBackCallback? _navigateBackCallback;
-
-  // Коллбэк для запросов к FileTransferService
-  FileTransferService? _fileTransferService;
-
-  ProgressController({required this.isSending})
-    : _state = ProgressState(
-        isSending: isSending,
-        cancelledTransfers: {},
-        shouldShowCancellationToast: false,
-        cancellationMessage: null,
-        transferHistory: {},
+  void _setupRemoteCancellationCallback() {
+    service.setRemoteCancellationCallback((transferId) {
+      handleRemoteCancellation(
+        message: isSending
+            ? 'The receiver canceled the transfer'
+            : 'The sender canceled the transfer',
+        transferId: transferId,
       );
+    });
+  }
 
-  // Установка коллбэков
-  void setCallbacks({
-    required ShowCancelSendingToastCallback showToast,
-    required NavigateBackCallback navigateBack,
-    required FileTransferService service,
-  }) {
-    _showCancelSendingToastCallback = showToast;
-    _navigateBackCallback = navigateBack;
-    _fileTransferService = service;
+  // Добавление отмененной передачи в историю
+  void _addCancelledTransferToHistory(String transferId) {
+    final transfer = service.activeTransfers[transferId];
+    if (transfer != null) {
+      addToTransferHistory(transferId, transfer.copy());
+    }
+    addCancelledTransfer(transferId);
   }
 
   // MARK: - State Updates
@@ -69,22 +67,6 @@ class ProgressController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void showCancellationToast(String message) {
-    _state = _state.copyWith(
-      shouldShowCancellationToast: true,
-      cancellationMessage: message,
-    );
-    notifyListeners();
-  }
-
-  void hideCancellationToast() {
-    _state = _state.copyWith(
-      shouldShowCancellationToast: false,
-      cancellationMessage: null,
-    );
-    notifyListeners();
-  }
-
   void clearAll() {
     _state = _state.copyWith(
       cancelledTransfers: {},
@@ -98,9 +80,6 @@ class ProgressController extends ChangeNotifier {
   // MARK: - Business Logic
 
   bool hasAnyTransferStarted() {
-    final service = _fileTransferService;
-    if (service == null) return false;
-
     if (service.activeTransfers.values.any((t) => t.receivedBytes > 0)) {
       return true;
     }
@@ -112,10 +91,25 @@ class ProgressController extends ChangeNotifier {
     return false;
   }
 
-  bool areAllTransfersCompleteOrCancelled() {
-    final service = _fileTransferService;
-    if (service == null) return false;
+  int getTotalFileCount() {
+    final transfers = service.activeTransfers.values;
 
+    int totalCount = 0;
+    for (final transfer in transfers) {
+      totalCount += transfer.totalFiles;
+    }
+    return totalCount;
+  }
+
+  bool areAllTransfersCompleted() {
+    if (service.activeTransfers.isEmpty) return false;
+
+    return service.activeTransfers.values.every((transfer) {
+      return transfer.progress >= 100.0;
+    });
+  }
+
+  bool areAllTransfersCompleteOrCancelled() {
     final allTransfers = <String, FileTransfer>{};
 
     for (final transfer in service.activeTransfers.values) {
@@ -128,27 +122,20 @@ class ProgressController extends ChangeNotifier {
       }
     }
 
-    if (allTransfers.isEmpty) {
-      return false;
-    }
+    if (allTransfers.isEmpty) return false;
 
     for (final transfer in allTransfers.values) {
       final isCancelled =
           _state.cancelledTransfers[transfer.transferId] == true;
       final isCompleted = transfer.progress >= 100;
 
-      if (!isCancelled && !isCompleted) {
-        return false;
-      }
+      if (!isCancelled && !isCompleted) return false;
     }
 
     return true;
   }
 
   List<FileTransfer> getAllTransfersForDisplay() {
-    final service = _fileTransferService;
-    if (service == null) return [];
-
     final allTransfersMap = <String, FileTransfer>{};
 
     for (final transfer in service.activeTransfers.values) {
@@ -190,37 +177,11 @@ class ProgressController extends ChangeNotifier {
   }
 
   Future<void> cancelTransfer(String transferId) async {
-    final service = _fileTransferService;
-    if (service == null) return;
-
-    final transfer = service.activeTransfers[transferId];
-    if (transfer != null) {
-      final transferCopy = FileTransfer(
-        transferId: transfer.transferId,
-        fileName: transfer.fileName,
-        fileSize: transfer.fileSize,
-        fileType: transfer.fileType,
-        file: transfer.file,
-        targetPath: transfer.targetPath,
-        onProgress: transfer.onProgress,
-        onComplete: transfer.onComplete,
-        onError: transfer.onError,
-        sendMessage: transfer.sendMessage,
-        totalFiles: transfer.totalFiles,
-        completedFiles: transfer.completedFiles,
-      )..receivedBytes = transfer.receivedBytes;
-
-      addToTransferHistory(transfer.transferId, transferCopy);
-    }
-
-    addCancelledTransfer(transferId);
+    _addCancelledTransferToHistory(transferId);
     await service.cancelTransfer(transferId);
   }
 
   Future<void> cancelAllTransfers() async {
-    final service = _fileTransferService;
-    if (service == null) return;
-
     final activeTransfers = service.activeTransfers.values.toList();
 
     for (final transfer in activeTransfers) {
@@ -229,23 +190,7 @@ class ProgressController extends ChangeNotifier {
       final isCompleted = transfer.progress >= 100;
 
       if (!isCancelled && !isCompleted) {
-        final transferCopy = FileTransfer(
-          transferId: transfer.transferId,
-          fileName: transfer.fileName,
-          fileSize: transfer.fileSize,
-          fileType: transfer.fileType,
-          file: transfer.file,
-          targetPath: transfer.targetPath,
-          onProgress: transfer.onProgress,
-          onComplete: transfer.onComplete,
-          onError: transfer.onError,
-          sendMessage: transfer.sendMessage,
-          totalFiles: transfer.totalFiles,
-          completedFiles: transfer.completedFiles,
-        )..receivedBytes = transfer.receivedBytes;
-
-        addToTransferHistory(transfer.transferId, transferCopy);
-        addCancelledTransfer(transfer.transferId);
+        _addCancelledTransferToHistory(transfer.transferId);
         await service.cancelTransfer(transfer.transferId);
       }
     }
@@ -255,65 +200,30 @@ class ProgressController extends ChangeNotifier {
     required String message,
     required String? transferId,
   }) {
-    showCancellationToast(message);
-
     if (transferId != null) {
-      addCancelledTransfer(transferId);
-
-      final service = _fileTransferService;
-      if (service != null) {
-        final transfer = service.activeTransfers[transferId];
-        if (transfer != null) {
-          final transferCopy = FileTransfer(
-            transferId: transfer.transferId,
-            fileName: transfer.fileName,
-            fileSize: transfer.fileSize,
-            fileType: transfer.fileType,
-            file: transfer.file,
-            targetPath: transfer.targetPath,
-            onProgress: transfer.onProgress,
-            onComplete: transfer.onComplete,
-            onError: transfer.onError,
-            sendMessage: transfer.sendMessage,
-            totalFiles: transfer.totalFiles,
-            completedFiles: transfer.completedFiles,
-          )..receivedBytes = transfer.receivedBytes;
-
-          addToTransferHistory(transfer.transferId, transferCopy);
-        }
-      }
+      _addCancelledTransferToHistory(transferId);
     }
 
     // Показываем тост через коллбэк
-    if (_showCancelSendingToastCallback != null) {
-      _showCancelSendingToastCallback!(message);
-      hideCancellationToast();
-    }
+    showToast(message);
   }
 
-  Future<void> handleGoToMainMenu() async {
-    final service = _fileTransferService;
-    if (service == null) return;
+  // TODO: добавить handleAllTransfersComplete в FileTransferService
+  Future<void> updateTransferFileCount() async {
+    if (areAllTransfersCompleted()) {
+      // TODO: CHECK
+      // Увеличиваем кол-во переданных файлов
+      final appSettings = AppSettingsService.instance;
+      await appSettings.decreaseTransferFiles(getTotalFileCount());
 
-    if (_state.isSending) {
-      await service.stopServer();
-    } else {
-      await service.clearClientTransfers();
-    }
-
-    // Навигация через коллбэк
-    if (_navigateBackCallback != null) {
-      _navigateBackCallback!();
+      // Показывем диалог оценки приложения через коллбэк
+      showLikeAppDialog();
     }
   }
 
   @override
   void dispose() {
     clearAll();
-    _showCancelSendingToastCallback = null;
-    _navigateBackCallback = null;
-    _fileTransferService = null;
-
     super.dispose();
   }
 }

@@ -129,17 +129,43 @@ class FileTransferService extends ChangeNotifier {
     try {
       print('🛑 Остановка сервера...');
 
+      // 1. Отключаем всех подключенных клиентов
+      print('🔌 Отключение подключенных клиентов...');
+      final clientsToDisconnect = List<WebSocket>.from(
+        _webSocketServer.connectedClients,
+      );
+
+      for (final client in clientsToDisconnect) {
+        try {
+          // Отправляем уведомление об отключении
+          await _webSocketServer.sendToClient(client, {
+            'type': 'server_stopping',
+            'message': 'Сервер останавливается',
+            'timestamp': DateTime.now().toIso8601String(),
+          });
+
+          // Закрываем соединение
+          await client.close();
+        } catch (e) {
+          print('⚠️ Ошибка при отключении клиента: $e');
+        }
+      }
+
+      // 2. Закрываем все file receivers
       await _transferManager.closeAllFileReceivers();
+
+      // 3. Очищаем все передачи
       _transferManager.clearAllTransfers();
+
+      // 4. Останавливаем сервер
       await _webSocketServer.stopServer();
 
       notifyListeners();
-      print('✅ Сервер остановлен, все передачи очищены');
+      print('✅ Сервер остановлен, все клиенты отключены, передачи очищены');
     } catch (e) {
       print('❌ Ошибка остановки сервера: $e');
     }
   }
-
   // MARK: - ОТПРАВКА ФАЙЛОВ С СЕРВЕРА
 
   Future<void> sendFilesToClient(

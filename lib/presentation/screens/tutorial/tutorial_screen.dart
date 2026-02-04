@@ -41,7 +41,7 @@ class TutorialScreen extends StatelessWidget {
     return Scaffold(
       appBar: CustomAppBar(
         title: 'Tutorial',
-        automaticallyImplyLeading: Navigator.canPop(context),
+        onBackPressed: () => _onPop(context),
       ),
       body: ListView.separated(
         padding: EdgeInsets.symmetric(
@@ -87,15 +87,22 @@ and connect the other to it.
           return index == titles.length - 1
               ? CustomButton.primary(
                   title: 'Got it',
-                  onPressed: () =>
-                      // TODO: SAVE STATUS
-                      Navigator.canPop(context)
-                      ? Navigator.pop(context)
-                      : Navigator.pushNamed(context, AppRoutes.main),
+                  onPressed: () => _onPop(context),
                 )
               : item;
         },
       ),
     );
+  }
+
+  Future<void> _onPop(BuildContext context) async {
+    final appSettings = AppSettingsService.instance;
+    if (!appSettings.isTutorialSkipped) await appSettings.skipTutorial();
+
+    if (context.mounted) {
+      Navigator.canPop(context)
+          ? Navigator.pop(context)
+          : Navigator.pushNamed(context, AppRoutes.main);
+    }
   }
 }

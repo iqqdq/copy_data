@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
 import 'package:provider/provider.dart';
-
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
@@ -15,61 +13,26 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  late ProgressController _controller;
+  late final ProgressController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = ProgressController(isSending: widget.isSending);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    // Устанавливаем коллбэки
-    if (!_controller.isReady) {
-      final service = Provider.of<FileTransferService>(context, listen: false);
-
-      _controller.setCallbacks(
-        showToast: (message) {
+    _controller = ProgressController(
+      service: Provider.of<FileTransferService>(context, listen: false),
+      isSending: widget.isSending,
+      showToast: (message) {
+        if (mounted) {
           CustomToast.showToast(context: context, message: message);
-        },
-        navigateBack: () {
-          if (mounted) Navigator.pop(context);
-        },
-        service: service,
-      );
-
-      // Callback для удаленных отмен
-      service.setRemoteCancellationCallback((transferId) {
-        _controller.handleRemoteCancellation(
-          message: 'The transfer was canceled',
-          transferId: transferId,
-        );
-      });
-    }
-
-    // Показываем тост при отмене передачи
-    final state = _controller.state;
-    if (state.shouldShowCancellationToast &&
-        state.cancellationMessage != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        CustomToast.showToast(
-          context: context,
-          message: state.cancellationMessage!,
-        );
-        _controller.hideCancellationToast();
-      });
-    }
-
-    // Показываем диалог оценки приложения после первой передачи/приема файлов
-    // LikeAppDialog.show(context); TODO: ДОБВИТЬ КОЛЛБЭК ПОСЛЕ ТРАНСФЕРА
-
-    // Увеличиваем кол-во переданных файлов
-    if (widget.isSending) {
-      // await appSettings.increaseTransferFiles(); // TODO: ОБНОВИТЬ СЧЕТЧИК ТРАНСФЕРОВ ТОЛЬКО ЕСЛИ МЫ - СЕРВЕР
-    }
+        }
+      },
+      showLikeAppDialog: () {
+        // TODO: CHECK
+        if (mounted) {
+          LikeAppDialog.show(context);
+        }
+      },
+    );
   }
 
   @override
@@ -78,21 +41,20 @@ class _ProgressScreenState extends State<ProgressScreen> {
     super.dispose();
   }
 
-  // При нажатии на кнокпку "Cancel sending/reveiving"
   Future<void> _cancelTransferWithDialog(String transferId) async {
     await DestructiveDialog.show(
       context,
-      message: widget.isSending
+      message: _controller.state.isSending
           ? 'Are you sure you want to stop sending files? Your transfer will be interrupted'
           : 'Are you sure you want to stop receiving files? Your transfer will be interrupted',
-      cancelTitle: widget.isSending ? 'Keep sending' : 'Keep receiving',
-      onDestructivePressed: () async {
-        await _controller.cancelTransfer(transferId);
-      },
+      cancelTitle: _controller.state.isSending
+          ? 'Keep sending'
+          : 'Keep receiving',
+      onDestructivePressed: () async =>
+          await _controller.cancelTransfer(transferId),
     );
   }
 
-  // При выходе из окна
   Future<void> _cancelAllTransfersWithDialog() async {
     if (!_controller.hasAnyTransferStarted()) {
       if (mounted) Navigator.pop(context);
@@ -110,9 +72,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           ? 'Are you sure you want to stop sending all files? All transfers will be interrupted'
           : 'Are you sure you want to stop receiving all files? All transfers will be interrupted',
       cancelTitle: widget.isSending ? 'Keep sending' : 'Keep receiving',
-      onDestructivePressed: () async {
-        await _controller.cancelAllTransfers();
-      },
+      onDestructivePressed: () async => await _controller.cancelAllTransfers(),
     );
   }
 
@@ -128,17 +88,18 @@ class _ProgressScreenState extends State<ProgressScreen> {
             .activeTransfers;
 
         final hasAnyTransferStarted = _controller.hasAnyTransferStarted();
-        final areAllTransfersCompleteOrCancelled = _controller
-            .areAllTransfersCompleteOrCancelled();
 
         final allTransfers = _controller.getAllTransfersForDisplay();
-        final groupedTransfers = _controller.groupTransfers(allTransfers);
 
+        final groupedTransfers = _controller.groupTransfers(allTransfers);
         final photoTransfers = groupedTransfers['photos']!;
         final videoTransfers = groupedTransfers['videos']!;
 
         final hadPhotoTransfers = photoTransfers.isNotEmpty;
         final hadVideoTransfers = videoTransfers.isNotEmpty;
+
+        final areAllTransfersCompleteOrCancelled = _controller
+            .areAllTransfersCompleteOrCancelled();
 
         return Scaffold(
           appBar: CustomAppBar(
@@ -185,7 +146,13 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         allTransfers.isNotEmpty)
                       CustomButton.primary(
                         title: 'Go to main menu',
-                        onPressed: () => _controller.handleGoToMainMenu(),
+                        onPressed: () async {
+                          state.isSending
+                              ? await _controller.service.stopServer()
+                              : await _controller.service
+                                    .clearClientTransfers();
+                          if (context.mounted) Navigator.pop(context);
+                        },
                       ),
                   ],
                 ),

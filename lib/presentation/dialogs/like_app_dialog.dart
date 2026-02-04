@@ -11,7 +11,10 @@ class LikeAppDialog {
   static Future<void> show(BuildContext context) async {
     final appSettings = AppSettingsService.instance;
 
-    if (context.mounted && isSubscribed.value && !appSettings.isAppLiked) {
+    if (Platform.isIOS &&
+        context.mounted &&
+        isSubscribed.value &&
+        !appSettings.isAppLiked) {
       final result = await showOkCancelAlertDialog(
         context: context,
         title: 'Do you like the app?',

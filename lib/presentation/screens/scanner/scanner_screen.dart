@@ -16,25 +16,24 @@ class ScannerScreen extends StatefulWidget {
 
 class _ScannerScreenState extends State<ScannerScreen> {
   final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
-  late ScannerController _controller;
+  late final ScannerController _controller;
 
   @override
   void initState() {
     super.initState();
     _controller = ScannerController(
+      service: Provider.of<FileTransferService>(context, listen: false),
       showOkDialog: (title, message) async {
-        return OkDialog.show(context, title: title, message: message);
+        if (mounted) {
+          await OkDialog.show(context, title: title, message: message);
+        }
       },
       navigateTo: (route, {arguments}) async {
         if (mounted) {
           Navigator.pushReplacementNamed(context, route, arguments: arguments);
         }
       },
-      fileTransferServiceCallback: () {
-        return Provider.of<FileTransferService>(context, listen: false);
-      },
     );
-    _controller.setupSubscriptionCallback();
   }
 
   @override

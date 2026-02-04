@@ -35,6 +35,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final appSettings = AppSettingsService.instance;
+      if (!appSettings.isTutorialSkipped) {
+        await Navigator.pushNamed(context, AppRoutes.tutorial);
+      }
+
       await _showRateAppDialog();
       await _checkPermissions();
     });
@@ -133,9 +138,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _showRateAppDialog() async {
-    if (AppSettingsService.instance.isAppRated) {
+    final appSettings = AppSettingsService.instance;
+    if (!appSettings.isAppRated) {
       if (Platform.isIOS && await InAppReview.instance.isAvailable()) {
         await InAppReview.instance.requestReview();
+        await appSettings.rateApp();
       }
     }
   }

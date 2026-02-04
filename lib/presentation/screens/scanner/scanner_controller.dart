@@ -8,23 +8,28 @@ import '../../../core/core.dart';
 import '../../presentation.dart';
 
 class ScannerController extends ChangeNotifier {
+  final FileTransferService service;
   final ShowDialogCallback showOkDialog;
-  final NavigateCallback navigateTo;
-  final FileTransferServiceCallback fileTransferServiceCallback;
-  ScannerState _state;
+  final NavigateToCallback navigateTo;
 
+  ScannerState _state;
   ScannerState get state => _state;
+
   QRViewController? qrController;
 
   ScannerController({
+    required this.service,
     required this.showOkDialog,
     required this.navigateTo,
-    required this.fileTransferServiceCallback,
   }) : _state = const ScannerState(
          isConnecting: false,
          isConnected: false,
          isDialogShowing: false,
-       );
+       ) {
+    service.setOnSubscriptionRequiredCallback(
+      () => handleSubscriptionRequired(service),
+    );
+  }
 
   // MARK: - State Updates
 
@@ -55,18 +60,6 @@ class ScannerController extends ChangeNotifier {
 
   // MARK: - Business Logic
 
-  void setupSubscriptionCallback() {
-    final service = fileTransferServiceCallback();
-    service.setOnSubscriptionRequiredCallback(() {
-      handleSubscriptionRequired(service);
-    });
-  }
-
-  void removeSubscriptionCallback() {
-    final service = fileTransferServiceCallback();
-    service.removeOnSubscriptionRequiredCallback();
-  }
-
   void handleSubscriptionRequired(FileTransferService service) {
     if (_state.isDialogShowing) return;
 
@@ -77,10 +70,14 @@ class ScannerController extends ChangeNotifier {
     }
 
     // Показываем диалог
-    Future.delayed(Duration.zero, () {
-      _showSubscriptionRequiredDialog(service);
-    });
+    Future.delayed(
+      Duration.zero,
+      () => _showSubscriptionRequiredDialog(service),
+    );
   }
+
+  void removeSubscriptionCallback() =>
+      service.removeOnSubscriptionRequiredCallback();
 
   Future<void> _showSubscriptionRequiredDialog(
     FileTransferService service,
@@ -171,8 +168,6 @@ class ScannerController extends ChangeNotifier {
   Future<void> connectFromQR(String qrData) async {
     setConnecting(true);
     setQrData(qrData);
-
-    final service = fileTransferServiceCallback();
 
     String serverIp;
     int port = FileTransferService.PORT;

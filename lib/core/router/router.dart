@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../presentation/presentation.dart';
+import '../core.dart';
 
 abstract class AppRoutes {
   static const String onboard = '/onboard';
@@ -16,7 +17,9 @@ abstract class AppRoutes {
 }
 
 abstract class AppNavigation {
-  static const String initialRoute = AppRoutes.onboard;
+  static final String initialRoute = isSubscribed.value
+      ? AppRoutes.main
+      : AppRoutes.paywall;
 
   static final routes = <String, Widget Function(BuildContext)>{
     AppRoutes.main: (_) => const MainScreen(),

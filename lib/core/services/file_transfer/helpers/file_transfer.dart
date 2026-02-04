@@ -75,6 +75,24 @@ class FileTransfer with ChangeNotifier {
     }
   }
 
+  // НОВЫЙ МЕТОД: Создание копии объекта
+  FileTransfer copy() {
+    return FileTransfer(
+      transferId: transferId,
+      fileName: fileName,
+      fileSize: fileSize,
+      fileType: fileType,
+      file: file,
+      targetPath: targetPath,
+      onProgress: onProgress,
+      onComplete: onComplete,
+      onError: onError,
+      sendMessage: sendMessage,
+      totalFiles: totalFiles,
+      completedFiles: completedFiles,
+    )..receivedBytes = receivedBytes;
+  }
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;

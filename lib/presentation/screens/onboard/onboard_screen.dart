@@ -85,8 +85,13 @@ class _OnboardScreenState extends State<OnboardScreen> {
 
                         CustomButton.primary(
                           title: 'Continue',
-                          onPressed: () => _index == _titles.length - 1
-                              ? isSubscribed.value == true
+                          onPressed: () async {
+                            final appSettings = AppSettingsService.instance;
+                            await appSettings.skipOnboard();
+
+                            if (_index == _titles.length - 1) {
+                              if (context.mounted) {
+                                isSubscribed.value == true
                                     ? Navigator.pushReplacementNamed(
                                         context,
                                         AppRoutes.main,
@@ -98,8 +103,12 @@ class _OnboardScreenState extends State<OnboardScreen> {
                                               PaywallScreen(),
                                           transitionDuration: Duration.zero,
                                         ),
-                                      )
-                              : setState(() => _index = (_index + 1)),
+                                      );
+                              }
+                            } else {
+                              setState(() => _index = (_index + 1));
+                            }
+                          },
                         ),
                       ],
                     ).withDecoration(

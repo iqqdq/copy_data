@@ -8,19 +8,28 @@ import '../../../core/core.dart';
 import '../../presentation.dart';
 
 class SendController extends ChangeNotifier {
+  final FileTransferService service;
   final ShowPremiumDialogCallback showPremiumDialog;
   final ShowToastCallback showToast;
-  final NavigateCallback navigateTo;
-  final FileTransferServiceCallback fileTransferServiceCallback;
+  final NavigateToCallback navigateTo;
 
   SendState _state;
   SendState get state => _state;
 
+  String get getQrData {
+    final prefix = _state.selectedIndex == 0 ? 'ios_' : 'android_';
+    return '$prefix${service.localIp}:${FileTransferService.PORT}';
+  }
+
+  String get title => _state.selectedIndex == 0
+      ? 'Send file to IOS device'
+      : 'Send file to Android device';
+
   SendController({
+    required this.service,
     required this.showPremiumDialog,
     required this.showToast,
     required this.navigateTo,
-    required this.fileTransferServiceCallback,
   }) : _state = SendState(
          selectedIndex: 0,
          autoSendTriggered: false,
@@ -77,22 +86,18 @@ class SendController extends ChangeNotifier {
   // MARK: - Business Logic
 
   Future<void> startServer() async {
-    final service = fileTransferServiceCallback();
     if (!service.isServerRunning) {
       await service.startServer();
     }
   }
 
   Future<void> stopServer() async {
-    final service = fileTransferServiceCallback();
     if (service.isServerRunning) {
       await service.stopServer();
     }
   }
 
   void checkConnectionStatus(FileTransferService service) {
-    final service = fileTransferServiceCallback();
-
     if (service.connectedClients.isNotEmpty) {
       setClientConnected(true);
       handleClientConnected();
@@ -140,8 +145,6 @@ class SendController extends ChangeNotifier {
   }
 
   Future<void> pickAndSendMedia() async {
-    final service = fileTransferServiceCallback();
-
     try {
       // Проверяем подписку при подключении Android к iOS
       if (_state.selectedIndex == 1 && !isSubscribed.value) {
@@ -154,27 +157,33 @@ class SendController extends ChangeNotifier {
         return;
       }
 
+      // TODO: CHECK
       // Проверяем подписку на недельный лимит файлов
       late List<XFile> pickedFiles;
 
-      if (!isSubscribed.value) {
+      if (isSubscribed.value) {
+        pickedFiles = await ImagePicker().pickMultipleMedia();
+      } else {
         final appSettings = AppSettingsService.instance;
         final remainingFileTransfers = appSettings.remainingFileTransfers;
 
-        if (remainingFileTransfers == 0) {
-          // Если достигунт недельный лимит файлов для передачи показываем пэйволл
-          navigateTo(AppRoutes.paywall);
+        if (appSettings.isFileTransferLimitReached) {
+          // Если достигунт недельный лимит файлов для передачи показываем paywall
+          await navigateTo(AppRoutes.paywall);
           return;
         } else {
           // Иначе даем пользователю выбрать файлы
           pickedFiles = await ImagePicker().pickMultipleMedia();
-          // Затем показываем пэйволл
-          await navigateTo(AppRoutes.paywall);
 
-          // Если пользователь не подписался - обрезаем кол-во выбранных файлов до недельного лимита
-          // Максимальное кол-во в неделю - 10 файлов
-          if (!isSubscribed.value) {
-            pickedFiles = pickedFiles.take(remainingFileTransfers).toList();
+          if (pickedFiles.isNotEmpty) {
+            // Показываем paywall
+            await navigateTo(AppRoutes.paywall);
+
+            // Если пользователь не подписался - обрезаем кол-во выбранных файлов до недельного лимита
+            // Максимальное кол-во в неделю - 10 файлов
+            if (!isSubscribed.value) {
+              pickedFiles = pickedFiles.take(remainingFileTransfers).toList();
+            }
           }
         }
       }
@@ -204,17 +213,5 @@ class SendController extends ChangeNotifier {
     } else {
       setSelectedIndex(index);
     }
-  }
-
-  String getQrData() {
-    final service = fileTransferServiceCallback();
-    final prefix = _state.selectedIndex == 0 ? 'ios_' : 'android_';
-    return '$prefix${service.localIp}:${FileTransferService.PORT}';
-  }
-
-  String getTitleText() {
-    return _state.selectedIndex == 0
-        ? 'Send file to IOS device'
-        : 'Send file to Android device';
   }
 }
