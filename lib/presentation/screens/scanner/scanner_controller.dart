@@ -17,7 +17,7 @@ class ScannerController extends ChangeNotifier {
 
   QRViewController? qrController;
 
-  // Добавляем флаг для отслеживания отмены подключения
+  // флаг для отслеживания отмены подключения
   bool _connectionCancelledDueToSubscription = false;
 
   ScannerController({
