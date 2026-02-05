@@ -23,7 +23,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   void initState() {
     super.initState();
     _controller = PaywallController(isTrial: widget.isTrial ?? false);
-    // Apphud.paywallShown(AezakmiPriceService().paywallGlobal);// TODO: RETURN
+    Apphud.paywallShown(AezakmiPriceService().paywallGlobal);
   }
 
   @override
@@ -34,7 +34,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   Future<void> _onClose() async {
     if (!isSubscribed.value) {
-      // Apphud.paywallClosed(AezakmiPriceService().paywallGlobal); // TODO: RETURN
+      Apphud.paywallClosed(AezakmiPriceService().paywallGlobal);
     }
 
     if (mounted) {
@@ -59,12 +59,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
         listenable: _controller,
         builder: (context, _) {
           final state = _controller.state;
-          final priceAndDuration = state.isTrial ? 'trial' : 'not_trial';
-          // TODO: RETURN
-          //     ? weekTrialProduct.getPriceAndDurationPlus()
-          //     : weekProduct.getPriceAndDuration(omitOneUnit: true);
-          final duration = '3-day';
-          // TODO: RETURNweekTrialProduct.getTrialPeriod();
+          final priceAndDuration = state.isTrial
+              ? weekTrialProduct.getPriceAndDurationPlus()
+              : weekProduct.getPriceAndDuration(omitOneUnit: true);
+          final duration = weekTrialProduct.getTrialPeriod();
 
           return SafeArea(
             child: Stack(
@@ -80,7 +78,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
                       PaywallFooter(
                         isLoading: state.isLoading,
                         price: priceAndDuration,
-                        duration: duration,
+                        duration: duration ?? '',
                         value: state.isTrial,
                         onChanged: (value) => _controller.switchTrial(value),
                         onPressed: () async {

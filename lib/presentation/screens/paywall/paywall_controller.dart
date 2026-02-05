@@ -19,8 +19,8 @@ class PaywallController with ChangeNotifier {
     _state = _state.copyWith(isLoading: true);
     notifyListeners();
 
-    final result = await PurchaseService.instance.purchase(
-      // priceProductService: _state.isTrial ? weekTrialProduct : weekProduct, // TODO: RETURN
+    await PurchaseService.instance.purchase(
+      priceProductService: _state.isTrial ? weekTrialProduct : weekProduct,
     );
 
     _state = _state.copyWith(isLoading: false);
