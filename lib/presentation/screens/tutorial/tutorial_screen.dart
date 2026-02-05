@@ -9,6 +9,21 @@ import '../../presentation.dart';
 class TutorialScreen extends StatelessWidget {
   const TutorialScreen({super.key});
 
+  void _openStore() => Platform.isIOS
+      ? launchUrlString(AppConstants.shareUrl)
+      : print('Open GooglePlay'); // TODO: OPEN GOOGLE PLAY
+
+  Future<void> _onPop(BuildContext context) async {
+    final appSettings = AppSettingsService.instance;
+    if (!appSettings.isTutorialSkipped) await appSettings.skipTutorial();
+
+    if (context.mounted) {
+      Navigator.canPop(context)
+          ? Navigator.pop(context)
+          : Navigator.pushNamed(context, AppRoutes.main);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final titles = [
@@ -41,6 +56,7 @@ class TutorialScreen extends StatelessWidget {
     return Scaffold(
       appBar: CustomAppBar(
         title: 'Tutorial',
+        automaticallyImplyLeading: Navigator.canPop(context),
         onBackPressed: () => _onPop(context),
       ),
       body: ListView.separated(
@@ -58,15 +74,7 @@ class TutorialScreen extends StatelessWidget {
                 ? ClickablePlatformText(
                     title: subtitles[index],
                     highlighted: 'iOS / Android',
-                    onPressed: () {
-                      if (Platform.isIOS) {
-                        // TODO: CHECK OPEN AppStore
-                        launchUrlString(AppConstants.shareUrl);
-                      } else {
-                        // TODO: OPEN GOOGLE PLAY
-                        print('Open GooglePlay');
-                      }
-                    },
+                    onPressed: _openStore,
                   )
                 : subtitles[index].toHighlightedText(
                     highlightedWords: highlights[index],
@@ -93,16 +101,5 @@ and connect the other to it.
         },
       ),
     );
-  }
-
-  Future<void> _onPop(BuildContext context) async {
-    final appSettings = AppSettingsService.instance;
-    if (!appSettings.isTutorialSkipped) await appSettings.skipTutorial();
-
-    if (context.mounted) {
-      Navigator.canPop(context)
-          ? Navigator.pop(context)
-          : Navigator.pushNamed(context, AppRoutes.main);
-    }
   }
 }

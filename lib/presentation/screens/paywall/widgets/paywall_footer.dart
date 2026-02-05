@@ -6,6 +6,7 @@ import '../../../presentation.dart';
 class PaywallFooter extends StatelessWidget {
   final bool isLoading;
   final String price;
+  final String duration;
   final bool value;
   final Function(bool) onChanged;
   final VoidCallback onPressed;
@@ -14,6 +15,7 @@ class PaywallFooter extends StatelessWidget {
     super.key,
     required this.isLoading,
     required this.price,
+    required this.duration,
     required this.value,
     required this.onChanged,
     required this.onPressed,
@@ -56,7 +58,7 @@ class PaywallFooter extends StatelessWidget {
                           child: Padding(
                             padding: EdgeInsets.only(right: 6.0),
                             child: Text(
-                              '3-day free trial is enabled',
+                              '$duration free trial is enabled',
                               style: AppTypography.body16Regular,
                             ),
                           ),

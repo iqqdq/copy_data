@@ -24,14 +24,18 @@ class AppSettingsService {
   bool get isAppRated => _prefs.getBool(_keyIsAppRated) ?? false;
 
   bool get isFileTransferLimitReached {
-    final count = _prefs.getInt(_keyTransferFilesCount) ?? 0;
-    return count >= _maxTransfersPerWeek && !_isWeekPassed();
+    if (_isWeekPassed()) return false; // Неделя прошла - лимит не достигнут
+
+    final remaining =
+        _prefs.getInt(_keyTransferFilesCount) ?? _maxTransfersPerWeek;
+    return remaining <=
+        0; // Если осталось 0 или меньше файлов - лимит достигнут
   }
 
   int get remainingFileTransfers {
     if (_isWeekPassed()) return _maxTransfersPerWeek;
-    final count = _prefs.getInt(_keyTransferFilesCount) ?? 0;
-    final remaining = _maxTransfersPerWeek - count;
+    final remaining =
+        _prefs.getInt(_keyTransferFilesCount) ?? _maxTransfersPerWeek;
     return remaining > 0 ? remaining : 0;
   }
 
@@ -47,7 +51,7 @@ class AppSettingsService {
 
   Future<void> rateApp() async => await _prefs.setBool(_keyIsAppRated, true);
 
-  Future<void> decreaseTransferFiles(int length) async {
+  Future<void> increaseTransferFiles(int length) async {
     final now = DateTime.now();
 
     // Получаем дату начала текущей недели
@@ -60,13 +64,22 @@ class AppSettingsService {
         _keyTransferFilesWeekStart,
         now.millisecondsSinceEpoch,
       );
-      // Устанавливаем счетчик на количество текущих файлов
+      // Устанавливаем начальное значение: все файлы доступны
       await _prefs.setInt(_keyTransferFilesCount, _maxTransfersPerWeek);
-    } else {
-      // Неделя еще не прошла - уменьшаем кол-во допустное кол-во файлов для отправки
-      final currentCount = _prefs.getInt(_keyTransferFilesCount) ?? 0;
-      await _prefs.setInt(_keyTransferFilesCount, currentCount - length);
     }
+
+    // Получаем текущее оставшееся количество
+    final currentRemaining =
+        _prefs.getInt(_keyTransferFilesCount) ?? _maxTransfersPerWeek;
+
+    // Вычитаем переданные файлы из оставшегося количества
+    final newRemaining = currentRemaining - length;
+
+    // Сохраняем новое значение (не может быть меньше 0)
+    await _prefs.setInt(
+      _keyTransferFilesCount,
+      newRemaining > 0 ? newRemaining : 0,
+    );
   }
 
   bool _isWeekPassed() {

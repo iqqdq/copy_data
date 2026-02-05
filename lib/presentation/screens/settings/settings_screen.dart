@@ -5,13 +5,25 @@ import 'package:flutter/material.dart';
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
   @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late SettingsController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = SettingsController();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final assets = ['lock', 'document', 'share', 'headset'];
-    final titles = ['Privacy Policy', 'Terms of Use', 'Share App', 'Support'];
+    final state = _controller.state;
 
     return Scaffold(
       appBar: CustomAppBar(title: 'Settings'),
@@ -43,25 +55,24 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
 
-          ValueListenableBuilder<bool>(
-            valueListenable: isSubscribed,
-            builder: (context, value, _) {
-              // TODO: CHECK SUB ID
-              return value
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      padding: EdgeInsets.only(bottom: 16.0),
-                      child: CustomButton.primary(
-                        title: 'Subscription plans',
-                        onPressed: () => Navigator.pushNamed(
-                          context,
-                          AppRoutes.subscriptionPlans,
-                        ),
-                      ),
-                    );
-            },
-          ),
-
+          // ValueListenableBuilder<bool>(
+          //   valueListenable: isSubscribed,
+          //   builder: (context, value, _) {
+          //     return value
+          //         ? const SizedBox.shrink()
+          //         : Padding(
+          //             padding: EdgeInsets.only(bottom: 16.0),
+          //             child: CustomButton.primary(
+          //               title: 'Subscription plans',
+          //               onPressed: () => Navigator.pushNamed(
+          //                 context,
+          //                 AppRoutes.subscriptionPlans,
+          //               ),
+          //             ),
+          //           );
+          //   },
+          // ),
+          //
           Padding(
             padding: EdgeInsets.only(bottom: 16.0),
             child:
@@ -71,7 +82,7 @@ class SettingsScreen extends StatelessWidget {
                       : EdgeInsets.symmetric(vertical: 24.0),
                   physics: const NeverScrollableScrollPhysics(),
                   shrinkWrap: true,
-                  itemCount: titles.length,
+                  itemCount: state.titles.length,
                   separatorBuilder: (context, index) => Container(
                     margin: EdgeInsets.symmetric(horizontal: 24.0),
                     height: 1.0,
@@ -79,11 +90,11 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   itemBuilder: (context, index) {
                     return SettingsTile(
-                      asset: assets[index],
-                      title: titles[index],
-                      onPressed: () {
-                        // TODO:
-                      },
+                      asset: state.assets[index],
+                      title: state.titles[index],
+                      onPressed: () => index == 2
+                          ? _controller.shareApp()
+                          : _controller.openUrl(index),
                     );
                   },
                 ).withDecoration(

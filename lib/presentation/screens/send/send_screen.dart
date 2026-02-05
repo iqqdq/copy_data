@@ -53,13 +53,6 @@ class _SendScreenState extends State<SendScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final service = Provider.of<FileTransferService>(context, listen: true);
-    if (mounted) _controller.checkConnectionStatus(service);
-  }
-
-  @override
   void dispose() {
     _controller.dispose();
     super.dispose();

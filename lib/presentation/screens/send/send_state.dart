@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 @immutable
 class SendState {
   final int selectedIndex;
-  final bool autoSendTriggered;
   final bool isConnecting;
   final bool isConnected;
   final Map<int, bool> tabInitialized;
@@ -12,7 +11,6 @@ class SendState {
 
   const SendState({
     required this.selectedIndex,
-    required this.autoSendTriggered,
     required this.isConnecting,
     required this.isConnected,
     required this.tabInitialized,
@@ -22,7 +20,6 @@ class SendState {
 
   SendState copyWith({
     int? selectedIndex,
-    bool? autoSendTriggered,
     bool? isConnecting,
     bool? isConnected,
     Map<int, bool>? tabInitialized,
@@ -31,7 +28,6 @@ class SendState {
   }) {
     return SendState(
       selectedIndex: selectedIndex ?? this.selectedIndex,
-      autoSendTriggered: autoSendTriggered ?? this.autoSendTriggered,
       isConnecting: isConnecting ?? this.isConnecting,
       isConnected: isConnected ?? this.isConnected,
       tabInitialized: tabInitialized ?? this.tabInitialized,
@@ -46,7 +42,6 @@ class SendState {
 
     return other is SendState &&
         other.selectedIndex == selectedIndex &&
-        other.autoSendTriggered == autoSendTriggered &&
         other.isConnecting == isConnecting &&
         other.isConnected == isConnected &&
         mapEquals(other.tabInitialized, tabInitialized) &&
@@ -58,7 +53,6 @@ class SendState {
   int get hashCode {
     return Object.hash(
       selectedIndex,
-      autoSendTriggered,
       isConnecting,
       isConnected,
       tabInitialized,

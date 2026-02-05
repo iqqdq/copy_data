@@ -8,15 +8,15 @@ class PermissionAlert extends StatelessWidget {
   final VoidCallback onNextPressed;
   final VoidCallback onNotNowPressed;
   final List<bool> permissionStates;
-  final int currentPermissionIndex;
   final bool isRequestingPermission;
+  final bool allPermissionsGranted;
 
   const PermissionAlert({
     super.key,
     required this.onNextPressed,
     required this.onNotNowPressed,
     required this.permissionStates,
-    required this.currentPermissionIndex,
+    required this.allPermissionsGranted,
     this.isRequestingPermission = false,
   });
 
@@ -71,18 +71,24 @@ class PermissionAlert extends StatelessWidget {
                     isPermissionGranted: permissionStates[2],
                   ),
 
-                  Padding(
-                    padding: EdgeInsets.only(bottom: 8.0),
-                    child: CustomButton.primary(
-                      title: 'Next',
-                      onPressed: isRequestingPermission ? null : onNextPressed,
-                    ),
-                  ),
+                  allPermissionsGranted
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: EdgeInsets.only(bottom: 8.0),
+                          child: CustomButton.primary(
+                            title: 'Next',
+                            onPressed: isRequestingPermission
+                                ? null
+                                : onNextPressed,
+                          ),
+                        ),
 
-                  CustomButton.transparent(
-                    title: 'Not now',
-                    onPressed: onNotNowPressed,
-                  ),
+                  allPermissionsGranted
+                      ? const SizedBox.shrink()
+                      : CustomButton.transparent(
+                          title: 'Not now',
+                          onPressed: onNotNowPressed,
+                        ),
                 ],
               ).withDecoration(
                 padding: EdgeInsets.all(24.0).copyWith(bottom: 8.0),

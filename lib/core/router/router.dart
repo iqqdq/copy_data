@@ -12,12 +12,15 @@ abstract class AppRoutes {
   static const String send = '/send';
   static const String progress = '/progress';
   static const String settings = '/settings';
-  static const String subscriptionPlans = '/subscription_plans';
+  // static const String subscriptionPlans = '/subscription_plans';
   static const String tutorial = '/tutorial';
 }
 
 abstract class AppNavigation {
-  static final String initialRoute = isSubscribed.value
+  static final String initialRoute =
+      !AppSettingsService.instance.isOnboardSkipped
+      ? AppRoutes.onboard
+      : isSubscribed.value
       ? AppRoutes.main
       : AppRoutes.paywall;
 
@@ -27,7 +30,7 @@ abstract class AppNavigation {
     AppRoutes.scanner: (_) => const ScannerScreen(),
     AppRoutes.send: (_) => const SendScreen(),
     AppRoutes.settings: (_) => const SettingsScreen(),
-    AppRoutes.subscriptionPlans: (_) => const SubscriptionPlansScreen(),
+    // AppRoutes.subscriptionPlans: (_) => const SubscriptionPlansScreen(),
     AppRoutes.tutorial: (_) => const TutorialScreen(),
   };
 
@@ -40,7 +43,7 @@ abstract class AppNavigation {
         );
       case AppRoutes.paywall:
         return MaterialPageRoute(
-          builder: (_) => const PaywallScreen(),
+          builder: (_) => PaywallScreen(isTrial: settings.arguments as bool?),
           fullscreenDialog: true,
         );
       case AppRoutes.progress:

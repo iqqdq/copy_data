@@ -11,6 +11,10 @@ class ProgressController extends ChangeNotifier {
   ProgressState _state;
   ProgressState get state => _state;
 
+  // Отслеживаем завершенные передачи для предотвращения повторных уведомлений
+  final Set<String> _completedTransfers = {};
+  bool _hasShownCompletionDialog = false;
+
   ProgressController({
     required this.isSending,
     required this.showToast,
@@ -21,28 +25,134 @@ class ProgressController extends ChangeNotifier {
          cancelledTransfers: {},
          transferHistory: {},
        ) {
-    // Колбэк для уведомления UI об отмене с другой стороны
-    _setupRemoteCancellationCallback();
+    _setupServiceCallbacks();
+    _startMonitoring();
   }
 
-  void _setupRemoteCancellationCallback() {
+  // MARK: - Настройка колбэков
+
+  void _setupServiceCallbacks() {
+    // Колбэк для удаленной отмены
     service.setRemoteCancellationCallback((transferId) {
-      handleRemoteCancellation(
-        message: isSending
-            ? 'The receiver canceled the transfer'
-            : 'The sender canceled the transfer',
-        transferId: transferId,
-      );
+      _handleRemoteCancellation(transferId);
     });
   }
 
-  // Добавление отмененной передачи в историю
-  void _addCancelledTransferToHistory(String transferId) {
-    final transfer = service.activeTransfers[transferId];
-    if (transfer != null) {
-      addToTransferHistory(transferId, transfer.copy());
+  void _startMonitoring() {
+    // Слушаем изменения в сервисе
+    service.addListener(_onServiceChanged);
+  }
+
+  void _onServiceChanged() {
+    _checkForCompletedTransfers();
+    notifyListeners();
+  }
+
+  // MARK: - Проверка завершения передач
+
+  void _checkForCompletedTransfers() {
+    final activeTransfers = service.activeTransfers;
+
+    if (activeTransfers.isEmpty) return;
+
+    // Проверяем каждую активную передачу
+    for (final transfer in activeTransfers.values) {
+      final transferId = transfer.transferId;
+      final isCancelled = _state.cancelledTransfers[transferId] == true;
+      final isCompleted = transfer.progress >= 100.0;
+      final isInHistory = _state.transferHistory.containsKey(transferId);
+
+      // Если передача завершена и еще не в истории
+      if (isCompleted && !isCancelled && !isInHistory) {
+        _handleTransferCompleted(transferId, transfer);
+      }
     }
-    addCancelledTransfer(transferId);
+
+    // Проверяем, все ли передачи завершены
+    if (_areAllTransfersCompleted()) {
+      _handleAllTransfersCompleted();
+    }
+  }
+
+  bool _areAllTransfersCompleted() {
+    final activeTransfers = service.activeTransfers;
+    if (activeTransfers.isEmpty) return false;
+
+    bool hasCompletedTransfer = false;
+
+    for (final transfer in activeTransfers.values) {
+      final transferId = transfer.transferId;
+      final isCancelled = _state.cancelledTransfers[transferId] == true;
+      final isCompleted = transfer.progress >= 100.0;
+
+      // Если есть хоть одна неотмененная и незавершенная передача
+      if (!isCancelled && !isCompleted) {
+        return false;
+      }
+
+      // Проверяем, есть ли хотя бы одна успешно завершенная передача
+      if (!isCancelled && isCompleted) {
+        hasCompletedTransfer = true;
+      }
+    }
+
+    return hasCompletedTransfer;
+  }
+
+  // MARK: - Обработчики событий
+
+  void _handleRemoteCancellation(String transferId) {
+    final message = isSending
+        ? 'The receiver canceled the transfer'
+        : 'The sender canceled the transfer';
+
+    handleRemoteCancellation(message: message, transferId: transferId);
+  }
+
+  void _handleTransferCompleted(String transferId, FileTransfer transfer) {
+    print('✅ Передача завершена: ${transfer.fileName} ($transferId)');
+
+    // Добавляем в историю
+    addToTransferHistory(transferId, transfer.copy());
+
+    // Добавляем в отслеживаемые завершенные
+    _completedTransfers.add(transferId);
+
+    // Обновляем счетчик файлов
+    _updateFileCountForTransfer(transfer);
+
+    notifyListeners();
+  }
+
+  void _handleAllTransfersCompleted() {
+    if (_hasShownCompletionDialog) return;
+
+    print('🎉 Все передачи успешно завершены!');
+    _hasShownCompletionDialog = true;
+
+    // Показываем диалог оценки
+    Future.delayed(Duration(milliseconds: 500), () {
+      if (isSending) {
+        showLikeAppDialog();
+      }
+    });
+  }
+
+  // MARK: - Работа со счетчиком файлов
+
+  Future<void> _updateFileCountForTransfer(FileTransfer transfer) async {
+    try {
+      if (transfer.totalFiles > 0) {
+        final appSettings = AppSettingsService.instance;
+        await appSettings.increaseTransferFiles(transfer.totalFiles);
+
+        print(
+          '📊 Передано файлов: ${transfer.totalFiles} из ${transfer.fileName}',
+        );
+      }
+    } catch (e) {
+      print('❌ Ошибка обновления счетчика файлов: $e');
+    }
   }
 
   // MARK: - State Updates
@@ -54,6 +164,13 @@ class ProgressController extends ChangeNotifier {
     newCancelledTransfers[transferId] = true;
 
     _state = _state.copyWith(cancelledTransfers: newCancelledTransfers);
+
+    // Добавляем в историю, если передача была активна
+    final transfer = service.activeTransfers[transferId];
+    if (transfer != null && !_state.transferHistory.containsKey(transferId)) {
+      addToTransferHistory(transferId, transfer.copy());
+    }
+
     notifyListeners();
   }
 
@@ -67,23 +184,31 @@ class ProgressController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _clearAll() {
+  void clearAll() {
+    service.clearClientTransfers();
+
     _state = _state.copyWith(
       cancelledTransfers: {},
       transferHistory: {},
       shouldShowCancellationToast: false,
       cancellationMessage: null,
     );
+
+    _completedTransfers.clear();
+    _hasShownCompletionDialog = false;
+
     notifyListeners();
   }
 
-  // MARK: - Business Logic
+  // MARK: - Публичные методы
 
   bool hasAnyTransferStarted() {
+    // Проверяем активные передачи
     if (service.activeTransfers.values.any((t) => t.receivedBytes > 0)) {
       return true;
     }
 
+    // Проверяем историю
     if (_state.transferHistory.values.any((t) => t.receivedBytes > 0)) {
       return true;
     }
@@ -102,20 +227,18 @@ class ProgressController extends ChangeNotifier {
   }
 
   bool areAllTransfersCompleted() {
-    if (service.activeTransfers.isEmpty) return false;
-
-    return service.activeTransfers.values.every((transfer) {
-      return transfer.progress >= 100.0;
-    });
+    return _areAllTransfersCompleted();
   }
 
   bool areAllTransfersCompleteOrCancelled() {
     final allTransfers = <String, FileTransfer>{};
 
+    // Активные передачи
     for (final transfer in service.activeTransfers.values) {
       allTransfers[transfer.transferId] = transfer;
     }
 
+    // Передачи из истории
     for (final entry in _state.transferHistory.entries) {
       if (!allTransfers.containsKey(entry.key)) {
         allTransfers[entry.key] = entry.value;
@@ -127,9 +250,11 @@ class ProgressController extends ChangeNotifier {
     for (final transfer in allTransfers.values) {
       final isCancelled =
           _state.cancelledTransfers[transfer.transferId] == true;
-      final isCompleted = transfer.progress >= 100;
+      final isCompleted = transfer.progress >= 100.0;
 
-      if (!isCancelled && !isCompleted) return false;
+      if (!isCancelled && !isCompleted) {
+        return false;
+      }
     }
 
     return true;
@@ -138,15 +263,17 @@ class ProgressController extends ChangeNotifier {
   List<FileTransfer> getAllTransfersForDisplay() {
     final allTransfersMap = <String, FileTransfer>{};
 
+    // 1. Активные передачи (все)
     for (final transfer in service.activeTransfers.values) {
       allTransfersMap[transfer.transferId] = transfer;
     }
 
+    // 2. Передачи из истории (только завершенные или отмененные)
     for (final entry in _state.transferHistory.entries) {
       final transfer = entry.value;
       final isCancelled =
           _state.cancelledTransfers[transfer.transferId] == true;
-      final isCompleted = transfer.progress >= 100;
+      final isCompleted = transfer.progress >= 100.0;
 
       if (isCancelled || isCompleted) {
         allTransfersMap[transfer.transferId] = transfer;
@@ -177,7 +304,7 @@ class ProgressController extends ChangeNotifier {
   }
 
   Future<void> cancelTransfer(String transferId) async {
-    _addCancelledTransferToHistory(transferId);
+    addCancelledTransfer(transferId);
     await service.cancelTransfer(transferId);
   }
 
@@ -187,10 +314,10 @@ class ProgressController extends ChangeNotifier {
     for (final transfer in activeTransfers) {
       final isCancelled =
           _state.cancelledTransfers[transfer.transferId] == true;
-      final isCompleted = transfer.progress >= 100;
+      final isCompleted = transfer.progress >= 100.0;
 
       if (!isCancelled && !isCompleted) {
-        _addCancelledTransferToHistory(transfer.transferId);
+        addCancelledTransfer(transfer.transferId);
         await service.cancelTransfer(transfer.transferId);
       }
     }
@@ -201,29 +328,17 @@ class ProgressController extends ChangeNotifier {
     required String? transferId,
   }) {
     if (transferId != null) {
-      _addCancelledTransferToHistory(transferId);
+      addCancelledTransfer(transferId);
     }
 
-    // Показываем тост через коллбэк
+    // Показываем тост
     showToast(message);
-  }
-
-  // TODO: добавить handleAllTransfersComplete в FileTransferService
-  Future<void> updateTransferFileCount() async {
-    if (areAllTransfersCompleted()) {
-      // TODO: CHECK
-      // Увеличиваем кол-во переданных файлов
-      final appSettings = AppSettingsService.instance;
-      await appSettings.decreaseTransferFiles(getTotalFileCount());
-
-      // Показывем диалог оценки приложения через коллбэк
-      showLikeAppDialog();
-    }
   }
 
   @override
   void dispose() {
-    _clearAll();
+    service.removeListener(_onServiceChanged);
+    clearAll();
     super.dispose();
   }
 }

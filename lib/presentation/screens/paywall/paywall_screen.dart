@@ -1,76 +1,124 @@
+import 'package:aezakmi_price_service/aezakmi_price_service.dart';
+import 'package:apphud/apphud.dart';
 import 'package:flutter/material.dart';
+
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/core.dart';
 import '../../presentation.dart';
 
 class PaywallScreen extends StatefulWidget {
-  const PaywallScreen({super.key});
+  final bool? isTrial;
+
+  const PaywallScreen({super.key, this.isTrial = false});
 
   @override
   State<PaywallScreen> createState() => _PaywallScreenState();
 }
 
 class _PaywallScreenState extends State<PaywallScreen> {
-  bool _value = false;
-  bool _isLoading = false;
+  late final PaywallController _controller;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 24.0,
-              ).copyWith(top: 36.0),
-              child: Column(
-                children: [
-                  const PaywallHeader(),
+  void initState() {
+    super.initState();
+    _controller = PaywallController(isTrial: widget.isTrial ?? false);
+    // Apphud.paywallShown(AezakmiPriceService().paywallGlobal);// TODO: RETURN
+  }
 
-                  PaywallFooter(
-                    isLoading: _isLoading, // TODO:
-                    price: r'$5.99', // TODO:
-                    value: _value,
-                    onChanged: (value) => setState(() => _value = value),
-                    onPressed: () async {
-                      isSubscribed.value = true; // TODO:
-                      _onClose();
-                    },
-                  ),
-
-                  TermsGroup(onRestore: () {}), // TODO:
-                ],
-              ),
-            ),
-
-            _isLoading
-                ? const SizedBox.shrink()
-                : Padding(
-                    padding: EdgeInsets.only(left: 16.0),
-                    child: CustomIconButton(
-                      icon: SvgPicture.asset(
-                        'assets/icons/cross.svg',
-                        colorFilter: ColorFilter.mode(
-                          AppColors.black,
-                          BlendMode.srcIn,
-                        ),
-                      ),
-                      onPressed: _onClose,
-                    ),
-                  ),
-          ],
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   Future<void> _onClose() async {
     if (!isSubscribed.value) {
-      // TODO: Paywall.didClose
+      // Apphud.paywallClosed(AezakmiPriceService().paywallGlobal); // TODO: RETURN
     }
 
-    Navigator.pushReplacementNamed(context, AppRoutes.main);
+    if (mounted) {
+      final appSettings = AppSettingsService.instance;
+      if (!appSettings.isTutorialSkipped) {
+        Navigator.pushReplacementNamed(context, AppRoutes.tutorial);
+        return;
+      }
+
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      } else {
+        Navigator.pushReplacementNamed(context, AppRoutes.main);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: ListenableBuilder(
+        listenable: _controller,
+        builder: (context, _) {
+          final state = _controller.state;
+          final priceAndDuration = state.isTrial ? 'trial' : 'not_trial';
+          // TODO: RETURN
+          //     ? weekTrialProduct.getPriceAndDurationPlus()
+          //     : weekProduct.getPriceAndDuration(omitOneUnit: true);
+          final duration = '3-day';
+          // TODO: RETURNweekTrialProduct.getTrialPeriod();
+
+          return SafeArea(
+            child: Stack(
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                  ).copyWith(top: 36.0),
+                  child: Column(
+                    children: [
+                      const PaywallHeader(),
+
+                      PaywallFooter(
+                        isLoading: state.isLoading,
+                        price: priceAndDuration,
+                        duration: duration,
+                        value: state.isTrial,
+                        onChanged: (value) => _controller.switchTrial(value),
+                        onPressed: () async {
+                          await _controller.purchase();
+                          _onClose();
+                        },
+                      ),
+
+                      TermsGroup(
+                        onRestore: () {
+                          _controller.restore();
+                          _onClose();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                state.isLoading
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: EdgeInsets.only(left: 16.0),
+                        child: CustomIconButton(
+                          icon: SvgPicture.asset(
+                            'assets/icons/cross.svg',
+                            colorFilter: ColorFilter.mode(
+                              AppColors.black,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          onPressed: _onClose,
+                        ),
+                      ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 }
