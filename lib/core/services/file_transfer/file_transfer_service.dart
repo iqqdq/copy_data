@@ -1,3 +1,5 @@
+// ignore_for_file: constant_identifier_names
+
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -10,7 +12,7 @@ class FileTransferService extends ChangeNotifier {
   // Зависимости
   final WebSocketServerService _webSocketServer = WebSocketServerService();
   final WebSocketClientService _webSocketClient = WebSocketClientService();
-  final VideoConverterService _videoConverter = VideoConverterService();
+  // final VideoConverterService _videoConverter = VideoConverterService();
   final GallerySaverService _gallerySaver = GallerySaverService();
   final FileTransferManager _transferManager = FileTransferManager();
 
@@ -170,7 +172,7 @@ class FileTransferService extends ChangeNotifier {
     _transferManager.closeAllFileReceivers();
 
     // 2. Очищаем конвертер видео
-    _videoConverter.dispose();
+    // _videoConverter.dispose();
 
     // 3. Оповещаем UI
     notifyListeners();
@@ -184,7 +186,7 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> _initialize() async {
     _serverFileSender = ServerFileSenderService(
-      videoConverter: _videoConverter,
+      // videoConverter: _videoConverter,
       transferManager: _transferManager,
       onProgressUpdated: () {
         // Уведомляем UI
@@ -642,7 +644,7 @@ class FileTransferService extends ChangeNotifier {
     removeAllCallbacks();
     _transferManager.dispose();
     _webSocketServer.dispose();
-    _videoConverter.dispose();
+    // _videoConverter.dispose(); // TODO: DELETE?
 
     stopServer();
     disconnect();

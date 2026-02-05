@@ -9,7 +9,7 @@ import 'package:path/path.dart' as path;
 import '../../core.dart';
 
 class ServerFileSenderService {
-  final VideoConverterService _videoConverter;
+  // final VideoConverterService _videoConverter;
   final FileTransferManager _transferManager;
   final VoidCallback onProgressUpdated;
 
@@ -18,10 +18,10 @@ class ServerFileSenderService {
   final Map<String, Map<int, bool>> _fileSaveConfirmations = {};
 
   ServerFileSenderService({
-    required VideoConverterService videoConverter,
+    // required VideoConverterService videoConverter,  TODO: DELETE?
     required FileTransferManager transferManager,
     required this.onProgressUpdated,
-  }) : _videoConverter = videoConverter,
+  }) : //  _videoConverter = videoConverter,
        _transferManager = transferManager;
 
   Future<void> sendFilesToClient(
@@ -550,7 +550,7 @@ class ServerFileSenderService {
         sendToClient,
       );
 
-      // ВАЖНОЕ ИЗМЕНЕНИЕ: Увеличиваем таймаут для видео файлов
+      // Увеличиваем таймаут для видео файлов
       print('⏳ Жду подтверждения сохранения файла ${i + 1} от клиента...');
 
       try {
@@ -620,53 +620,51 @@ class ServerFileSenderService {
       await Future.delayed(Duration(seconds: isVideoGroup ? 5 : 2));
 
       // ФИНАЛЬНАЯ ПРОВЕРКА СЧЕТЧИКА
-      if (transfer != null) {
-        final confirmedFiles =
-            _fileSaveConfirmations[groupTransferId]?.values
-                .where((confirmed) => confirmed == true)
-                .length ??
-            0;
+      final confirmedFiles =
+          _fileSaveConfirmations[groupTransferId]?.values
+              .where((confirmed) => confirmed == true)
+              .length ??
+          0;
 
-        // Если подтверждено меньше файлов, но все отправлено - устанавливаем totalFiles
-        if (confirmedFiles < transfer.totalFiles) {
+      // Если подтверждено меньше файлов, но все отправлено - устанавливаем totalFiles
+      if (confirmedFiles < transfer.totalFiles) {
+        print(
+          '⚠️ Подтверждено $confirmedFiles из ${transfer.totalFiles} файлов',
+        );
+
+        // Для последнего файла мог быть таймаут, но файл был сохранен
+        if (transfer.progress >= 100.0) {
           print(
-            '⚠️ Подтверждено $confirmedFiles из ${transfer.totalFiles} файлов',
+            '🔄 Исправляю счетчик завершенной передачи: '
+            '$confirmedFiles → ${transfer.totalFiles}',
           );
-
-          // Для последнего файла мог быть таймаут, но файл был сохранен
-          if (transfer.progress >= 100.0) {
-            print(
-              '🔄 Исправляю счетчик завершенной передачи: '
-              '$confirmedFiles → ${transfer.totalFiles}',
-            );
-            transfer.completedFiles = transfer.totalFiles;
-            onProgressUpdated.call(); // Уведомляем UI
-          } else {
-            transfer.completedFiles = confirmedFiles;
-          }
+          transfer.completedFiles = transfer.totalFiles;
+          onProgressUpdated.call(); // Уведомляем UI
         } else {
           transfer.completedFiles = confirmedFiles;
         }
+      } else {
+        transfer.completedFiles = confirmedFiles;
       }
-
-      // Завершаем прогресс группы - ТОЧНО 100%
-      transfer.updateProgress(totalGroupSize);
-
-      _sendProgressUpdate(
-        socket,
-        groupTransferId,
-        100.0,
-        totalGroupSize,
-        totalGroupSize,
-        sendToClient,
-      );
-      transfer.onComplete(files.first);
-
-      print(
-        '🎉 Все ${files.length} ${isVideoGroup ? 'видео' : 'фото'} отправлены с сервера! '
-        '(${transfer.completedFiles}/${transfer.totalFiles} файлов)',
-      );
     }
+
+    // Завершаем прогресс группы - ТОЧНО 100%
+    transfer.updateProgress(totalGroupSize);
+
+    _sendProgressUpdate(
+      socket,
+      groupTransferId,
+      100.0,
+      totalGroupSize,
+      totalGroupSize,
+      sendToClient,
+    );
+    transfer.onComplete(files.first);
+
+    print(
+      '🎉 Все ${files.length} ${isVideoGroup ? 'видео' : 'фото'} отправлены с сервера! '
+      '(${transfer.completedFiles}/${transfer.totalFiles} файлов)',
+    );
   }
 
   void _sendProgressUpdate(

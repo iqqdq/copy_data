@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'package:path/path.dart' as path;
+
 import '../../core.dart';
 
 class ClientFileReceiverService {
@@ -79,7 +78,6 @@ class ClientFileReceiverService {
       final fileName = data['fileName'] as String?;
       final fileSize = data['fileSize'] as int?;
       final fileType = data['fileType'] as String?;
-      final isConverting = data['isConverting'] as bool? ?? false;
 
       if (transferId != null && fileName != null && fileSize != null) {
         print(
@@ -104,7 +102,6 @@ class ClientFileReceiverService {
             final transfer = _transferManager.getTransfer(groupTransferId);
             if (transfer != null) {
               transfer.updateProgress(receivedBytes);
-              _transferManager.notifyListeners();
             }
           },
           onComplete: (file) async {
@@ -141,7 +138,6 @@ class ClientFileReceiverService {
     try {
       final transferId = data['transferId'] as String?;
       final chunkData = data['chunkData'] as String?;
-      final chunkIndex = data['chunkIndex'] as int?;
       final isLast = data['isLast'] as bool? ?? false;
 
       if (transferId != null && chunkData != null) {
@@ -191,9 +187,6 @@ class ClientFileReceiverService {
           print(
             '📊 Обновлен счетчик файлов: ${transfer.completedFiles}/${transfer.totalFiles}',
           );
-
-          // Уведомляем UI
-          _transferManager.notifyListeners();
         }
 
         // Отправляем подтверждение на сервер
@@ -282,7 +275,6 @@ class ClientFileReceiverService {
           if (receivedBytes != null && totalBytes != null) {
             transfer.updateProgress(receivedBytes);
           }
-          _transferManager.notifyListeners();
 
           // Отправляем подтверждение прогресса
           _sendProgressUpdate(

@@ -8,7 +8,6 @@ class PermissionAlert extends StatelessWidget {
   final VoidCallback onNextPressed;
   final VoidCallback onNotNowPressed;
   final List<bool> permissionStates;
-  final int currentPermissionIndex;
   final bool isRequestingPermission;
   final bool allPermissionsGranted;
 
@@ -17,82 +16,12 @@ class PermissionAlert extends StatelessWidget {
     required this.onNextPressed,
     required this.onNotNowPressed,
     required this.permissionStates,
-    required this.currentPermissionIndex,
     required this.allPermissionsGranted,
     this.isRequestingPermission = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (allPermissionsGranted) {
-      return Container(
-        padding: EdgeInsets.symmetric(horizontal: 24.0),
-        width: MediaQuery.of(context).size.width,
-        height: MediaQuery.of(context).size.height,
-        color: AppColors.black.withValues(alpha: 0.65),
-        child: Center(
-          child: Material(
-            color: Colors.transparent,
-            child:
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: EdgeInsets.only(bottom: 8.0),
-                      child: Text(
-                        'Permissions Granted',
-                        style: AppTypography.title20Medium,
-                      ),
-                    ),
-
-                    Padding(
-                      padding: EdgeInsets.only(bottom: 24.0),
-                      child: Text(
-                        'All required permissions have been granted! You can now send and receive data.',
-                        style: AppTypography.body16Regular,
-                      ),
-                    ),
-
-                    _PermissionInfo(
-                      asset: 'assets/icons/wi-fi.svg',
-                      title: 'Local Network',
-                      isPermissionGranted: permissionStates[0],
-                    ),
-
-                    _PermissionInfo(
-                      asset: 'assets/icons/image.svg',
-                      title: 'Photos & Videos',
-                      isPermissionGranted: permissionStates[1],
-                    ),
-
-                    _PermissionInfo(
-                      asset: 'assets/icons/camera.svg',
-                      title: 'Camera',
-                      isPermissionGranted: permissionStates[2],
-                    ),
-
-                    Padding(
-                      padding: EdgeInsets.only(bottom: 8.0),
-                      child: CustomButton.primary(
-                        title: 'Continue',
-                        onPressed: onNextPressed,
-                      ),
-                    ),
-                  ],
-                ).withDecoration(
-                  padding: EdgeInsets.all(24.0).copyWith(bottom: 8.0),
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(32.0),
-                  borderWidth: 3.0,
-                  borderColor: AppColors.black,
-                ),
-          ),
-        ),
-      );
-    }
-
-    // Оригинальный контент для запроса разрешений
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 24.0),
       width: MediaQuery.of(context).size.width,
@@ -142,18 +71,24 @@ class PermissionAlert extends StatelessWidget {
                     isPermissionGranted: permissionStates[2],
                   ),
 
-                  Padding(
-                    padding: EdgeInsets.only(bottom: 8.0),
-                    child: CustomButton.primary(
-                      title: 'Next',
-                      onPressed: isRequestingPermission ? null : onNextPressed,
-                    ),
-                  ),
+                  allPermissionsGranted
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: EdgeInsets.only(bottom: 8.0),
+                          child: CustomButton.primary(
+                            title: 'Next',
+                            onPressed: isRequestingPermission
+                                ? null
+                                : onNextPressed,
+                          ),
+                        ),
 
-                  CustomButton.transparent(
-                    title: 'Not now',
-                    onPressed: onNotNowPressed,
-                  ),
+                  allPermissionsGranted
+                      ? const SizedBox.shrink()
+                      : CustomButton.transparent(
+                          title: 'Not now',
+                          onPressed: onNotNowPressed,
+                        ),
                 ],
               ).withDecoration(
                 padding: EdgeInsets.all(24.0).copyWith(bottom: 8.0),

@@ -5,14 +5,12 @@ import '../../core/core.dart';
 class CustomSlider extends StatefulWidget {
   final int length;
   final int currentPage;
-  final ValueChanged<int> onPageChanged;
   final Duration animationDuration;
 
   const CustomSlider({
     super.key,
     required this.length,
     required this.currentPage,
-    required this.onPageChanged,
     this.animationDuration = const Duration(milliseconds: 300),
   }) : assert(currentPage >= 0 && currentPage < length);
 
@@ -60,12 +58,9 @@ class _CustomSliderState extends State<CustomSlider>
         final isCurrent = index == widget.currentPage;
         final wasCurrent = index == _previousPage;
 
-        return GestureDetector(
-          onTap: () => widget.onPageChanged(index),
-          child: Container(
-            margin: EdgeInsets.only(right: index < widget.length - 1 ? 2 : 0),
-            child: _buildSliderItem(index, isCurrent, wasCurrent),
-          ),
+        return Container(
+          margin: EdgeInsets.only(right: index < widget.length - 1 ? 2 : 0),
+          child: _buildSliderItem(index, isCurrent, wasCurrent),
         );
       }),
     );

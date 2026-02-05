@@ -21,6 +21,7 @@ dependencies:
   icons_launcher: ^3.0.3
   flutter_native_splash: ^2.4.7
   in_app_review: ^2.0.11
+  share_plus: ^12.0.1
 
   provider: ^6.1.5
 
@@ -42,6 +43,14 @@ dependencies:
 
   ffmpeg_kit_flutter_new: ^4.1.0
   path: ^1.9.1
+
+  apphud: ^2.7.1
+
+dependency_overrides:
+  aezakmi_price_service:
+    git:
+      url: https://github.com/aezakmiFlutter/packages-aezakmi_price_service.git
+      ref: "0.0.7"
 
 dev_dependencies:
   flutter_test:

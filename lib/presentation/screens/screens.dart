@@ -6,6 +6,5 @@ export 'receive/receive.dart';
 export 'send/send.dart';
 export 'scanner/scanner.dart';
 export 'settings/settings.dart';
-export 'splash/splash.dart';
 export 'subscription_plans/subscription_plans.dart';
 export 'tutorial/tutorial.dart';

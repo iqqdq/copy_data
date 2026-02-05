@@ -1,0 +1,23 @@
+{
+  "data": {
+    "results": [
+      {
+        "id": "5f4085a6",
+        "json": null,
+        "screen": null,
+        "name": "paywall",
+        "identifier": "paywall",
+        "default": false,
+        "experiment_id": null,
+        "experiment_name": null,
+        "from_paywall": null,
+        "variation_identifier": null,
+        "variation_name": null,
+        "items_v2": [],
+        "items": []
+      }
+    ],
+    "meta": null
+  },
+  "errors": null
+}
