@@ -32,22 +32,25 @@ class SendController extends ChangeNotifier {
     required this.navigateTo,
   }) : _state = SendState(
          selectedIndex: 0,
-         autoSendTriggered: false,
          isConnecting: false,
          isConnected: false,
          tabInitialized: {0: false, 1: false},
          isClientConnected: false,
-       );
+       ) {
+    // Слушаем изменения в сервисе
+    _setupConnectionListeners();
+  }
+
+  // MARK: - Настройка слушателей
+
+  void _setupConnectionListeners() => service.addListener(_onServiceChanged);
+
+  void _onServiceChanged() => _checkConnectionStatus();
 
   // MARK: - State Updates
 
   void setSelectedIndex(int index) {
     _state = _state.copyWith(selectedIndex: index);
-    notifyListeners();
-  }
-
-  void setAutoSendTriggered(bool value) {
-    _state = _state.copyWith(autoSendTriggered: value);
     notifyListeners();
   }
 
@@ -97,7 +100,7 @@ class SendController extends ChangeNotifier {
     }
   }
 
-  void checkConnectionStatus(FileTransferService service) {
+  void _checkConnectionStatus() {
     if (service.connectedClients.isNotEmpty) {
       setClientConnected(true);
       handleClientConnected();
@@ -107,9 +110,9 @@ class SendController extends ChangeNotifier {
     }
 
     // Автоматическая отправка при первом подключении
-    if (service.connectedClients.isNotEmpty && !_state.autoSendTriggered) {
-      triggerAutoSend();
-    }
+    // if (service.connectedClients.isNotEmpty && !_state.autoSendTriggered) {
+    //   triggerAutoSend();
+    // }
   }
 
   Future<void> handleClientConnected() async {
@@ -132,16 +135,9 @@ class SendController extends ChangeNotifier {
   }
 
   void handleClientDisconnected() {
-    setAutoSendTriggered(false);
+    print('🔌 Клиент отключился');
     setConnecting(false);
-  }
-
-  Future<void> triggerAutoSend() async {
-    if (_state.isConnecting) return;
-
-    setAutoSendTriggered(true);
-    await Future.delayed(const Duration(milliseconds: 500));
-    await pickAndSendMedia();
+    setConnected(false);
   }
 
   Future<void> pickAndSendMedia() async {
@@ -153,36 +149,42 @@ class SendController extends ChangeNotifier {
           'Sending files to Android devices is available only with a Premium subscription',
           () => navigateTo(AppRoutes.paywall),
         );
-
         return;
       }
 
-      // Проверяем подписку на недельный лимит файлов
+      final appSettings = AppSettingsService.instance;
+      final remainingFileTransfers = appSettings.remainingFileTransfers;
       late List<XFile> pickedFiles;
 
+      // Если пользователь уже подписан - просто выбираем файлы
       if (isSubscribed.value) {
         pickedFiles = await ImagePicker().pickMultipleMedia();
-      } else {
-        final appSettings = AppSettingsService.instance;
-        final remainingFileTransfers = appSettings.remainingFileTransfers;
-
+      }
+      // Если пользователь не подписан
+      else {
+        // Проверяем, достигнут ли лимит
         if (appSettings.isFileTransferLimitReached) {
-          // Если достигунт недельный лимит файлов для передачи показываем paywall
+          // Лимит достигнут - показываем paywall
           await navigateTo(AppRoutes.paywall);
-          return;
+
+          // Проверяем статус подписки после paywall
+          if (!isSubscribed.value) {
+            // Пользователь не подписался - выходим
+            return;
+          } else {
+            // Пользователь подписался - выбираем файлы без ограничений
+            pickedFiles = await ImagePicker().pickMultipleMedia();
+          }
         } else {
-          // Иначе даем пользователю выбрать файлы
+          // Лимит НЕ достигнут - показываем paywall сразу
+          await navigateTo(AppRoutes.paywall);
+
+          // Выбираем файлы после paywall
           pickedFiles = await ImagePicker().pickMultipleMedia();
 
-          if (pickedFiles.isNotEmpty) {
-            // Показываем paywall
-            await navigateTo(AppRoutes.paywall);
-
-            // Если пользователь не подписался - обрезаем кол-во выбранных файлов до недельного лимита
-            // Максимальное кол-во в неделю - 10 файлов
-            if (!isSubscribed.value) {
-              pickedFiles = pickedFiles.take(remainingFileTransfers).toList();
-            }
+          // Если пользователь не подписался - обрезаем до лимита
+          if (!isSubscribed.value && pickedFiles.isNotEmpty) {
+            pickedFiles = pickedFiles.take(remainingFileTransfers).toList();
           }
         }
       }
@@ -195,13 +197,9 @@ class SendController extends ChangeNotifier {
       if (files.isNotEmpty) {
         navigateTo(AppRoutes.progress, arguments: true);
         await service.sendFilesToConnectedClient(files);
-        return;
-      } else {
-        setAutoSendTriggered(false);
       }
     } catch (e) {
       showToast('There was an error while sending files');
-      setAutoSendTriggered(false);
       setSendError(e.toString());
     }
   }
@@ -213,5 +211,11 @@ class SendController extends ChangeNotifier {
     } else {
       setSelectedIndex(index);
     }
+  }
+
+  @override
+  void dispose() {
+    service.removeListener(_onServiceChanged);
+    super.dispose();
   }
 }

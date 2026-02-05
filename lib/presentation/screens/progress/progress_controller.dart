@@ -185,6 +185,8 @@ class ProgressController extends ChangeNotifier {
   }
 
   void clearAll() {
+    service.clearClientTransfers();
+
     _state = _state.copyWith(
       cancelledTransfers: {},
       transferHistory: {},

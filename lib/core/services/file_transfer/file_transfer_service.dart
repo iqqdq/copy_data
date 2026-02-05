@@ -447,13 +447,6 @@ class FileTransferService extends ChangeNotifier {
         'timestamp': DateTime.now().toIso8601String(),
       });
 
-      await Future.delayed(Duration(milliseconds: 500));
-      try {
-        await socket.close();
-      } catch (e) {
-        print('⚠️ Ошибка закрытия сокета: $e');
-      }
-
       notifyListeners();
       return;
     }
@@ -550,7 +543,13 @@ class FileTransferService extends ChangeNotifier {
         notifyListeners();
         break;
       case 'subscription_required':
-        _handleSubscriptionRequired(data);
+        // Android клиент получает это сообщение только от iOS серверов без подписки
+        if (Platform.isAndroid) {
+          print(
+            '📱 Android клиент получил subscription_required от iOS сервера',
+          );
+          _handleSubscriptionRequired(data);
+        }
         break;
       case 'group_metadata':
         _clientFileReceiver.handleGroupMetadata(data);

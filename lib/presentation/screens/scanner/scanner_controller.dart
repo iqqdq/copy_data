@@ -17,6 +17,9 @@ class ScannerController extends ChangeNotifier {
 
   QRViewController? qrController;
 
+  // Добавляем флаг для отслеживания отмены подключения
+  bool _connectionCancelledDueToSubscription = false;
+
   ScannerController({
     required this.service,
     required this.showOkDialog,
@@ -63,6 +66,9 @@ class ScannerController extends ChangeNotifier {
   void handleSubscriptionRequired(FileTransferService service) {
     if (_state.isDialogShowing) return;
 
+    // Устанавливаем флаг отмены
+    _connectionCancelledDueToSubscription = true;
+
     // Сбрасываем флаги подключения
     if (_state.isConnecting || _state.isConnected) {
       _state = _state.copyWith(isConnecting: false, isConnected: false);
@@ -92,6 +98,9 @@ class ScannerController extends ChangeNotifier {
 
     service.resetSubscriptionDialogFlag();
     setDialogShowing(false);
+
+    // Сбрасываем флаг после показа диалога
+    _connectionCancelledDueToSubscription = false;
 
     // Возобновляем сканирование
     qrController?.resumeCamera();
@@ -166,6 +175,9 @@ class ScannerController extends ChangeNotifier {
   }
 
   Future<void> connectFromQR(String qrData) async {
+    // Сбрасываем флаг перед новым подключением
+    _connectionCancelledDueToSubscription = false;
+
     setConnecting(true);
     setQrData(qrData);
 
@@ -188,7 +200,6 @@ class ScannerController extends ChangeNotifier {
     } catch (e) {
       print('❌ Ошибка подключения: $e');
       _showConnectionErrorDialog();
-
       return;
     }
 
@@ -196,9 +207,17 @@ class ScannerController extends ChangeNotifier {
     await Future.delayed(const Duration(milliseconds: 500));
 
     // Проверяем, не установился ли флаг shouldShowSubscriptionDialog
-    if (service.shouldShowSubscriptionDialog) {
+    if (service.shouldShowSubscriptionDialog ||
+        _connectionCancelledDueToSubscription) {
       // Если флаг установлен - callback уже сработал или сработает
       // Просто выходим, не показывая ConnectionStatusAlert
+      setConnecting(false);
+      qrController?.resumeCamera();
+      return;
+    }
+
+    // Если подключение было отменено из-за подписки - выходим
+    if (_connectionCancelledDueToSubscription) {
       setConnecting(false);
       qrController?.resumeCamera();
       return;
