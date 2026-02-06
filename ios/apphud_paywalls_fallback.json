@@ -13,8 +13,40 @@
         "from_paywall": null,
         "variation_identifier": null,
         "variation_name": null,
-        "items_v2": [],
-        "items": []
+        "items_v2": [
+          {
+            "id": "11d5b8a1",
+            "item_id": "69613d31-7ee8-414f-89b7-83ca9f7322ff",
+            "name": "week 5.99",
+            "product_id": "copydata_week",
+            "store": "app_store"
+          },
+          {
+            "id": "7b042571",
+            "item_id": "b87774c3-a1cd-4e78-a15a-87bfb22aa36b",
+            "name": "week trial 5.99",
+            "product_id": "copydata_week_trial",
+            "store": "app_store"
+          }
+        ],
+        "items": [
+          {
+            "id": "11d5b8a1",
+            "item_id": "69613d31-7ee8-414f-89b7-83ca9f7322ff",
+            "name": "week 5.99",
+            "product_id": "copydata_week",
+            "store": "app_store",
+            "properties": {}
+          },
+          {
+            "id": "7b042571",
+            "item_id": "b87774c3-a1cd-4e78-a15a-87bfb22aa36b",
+            "name": "week trial 5.99",
+            "product_id": "copydata_week_trial",
+            "store": "app_store",
+            "properties": {}
+          }
+        ]
       }
     ],
     "meta": null

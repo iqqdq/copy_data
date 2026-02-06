@@ -58,7 +58,9 @@ class PaywallFooter extends StatelessWidget {
                           child: Padding(
                             padding: EdgeInsets.only(right: 6.0),
                             child: Text(
-                              '$duration free trial is enabled',
+                              value
+                                  ? '$duration free trial is enabled'
+                                  : 'Enable a $duration free trial',
                               style: AppTypography.body16Regular,
                             ),
                           ),

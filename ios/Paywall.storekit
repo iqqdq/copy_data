@@ -59,7 +59,7 @@
           ],
           "productID" : "copydata_week",
           "recurringSubscriptionPeriod" : "P1W",
-          "referenceName" : "week 4.99",
+          "referenceName" : "$4.99",
           "subscriptionGroupID" : "DDC54E6E",
           "type" : "RecurringSubscription",
           "winbackOffers" : [
@@ -91,7 +91,7 @@
           ],
           "productID" : "copydata_week_trial",
           "recurringSubscriptionPeriod" : "P1W",
-          "referenceName" : "week 4.99 trial",
+          "referenceName" : "$4.99 + 3 Days",
           "subscriptionGroupID" : "DDC54E6E",
           "type" : "RecurringSubscription",
           "winbackOffers" : [

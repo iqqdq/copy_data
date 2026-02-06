@@ -60,7 +60,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         builder: (context, _) {
           final state = _controller.state;
           final priceAndDuration = state.isTrial
-              ? weekTrialProduct.getPriceAndDurationPlus()
+              ? '${weekTrialProduct.getPrice()} with ${weekTrialProduct.getTrialPeriod()} free trial'
               : weekProduct.getPriceAndDuration(omitOneUnit: true);
           final duration = weekTrialProduct.getTrialPeriod();
 

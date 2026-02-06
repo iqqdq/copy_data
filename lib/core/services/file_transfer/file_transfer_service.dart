@@ -12,7 +12,7 @@ class FileTransferService extends ChangeNotifier {
   // Зависимости
   final WebSocketServerService _webSocketServer = WebSocketServerService();
   final WebSocketClientService _webSocketClient = WebSocketClientService();
-  final VideoConverterService _videoConverter = VideoConverterService();
+  // final VideoConverterService _videoConverter = VideoConverterService();
   final GallerySaverService _gallerySaver = GallerySaverService();
   final FileTransferManager _transferManager = FileTransferManager();
 
@@ -186,7 +186,7 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> _initialize() async {
     _serverFileSender = ServerFileSenderService(
-      videoConverter: _videoConverter,
+      // videoConverter: _videoConverter,
       transferManager: _transferManager,
       onProgressUpdated: () {
         // Уведомляем UI
@@ -217,7 +217,7 @@ class FileTransferService extends ChangeNotifier {
   }
 
   void _setupTransferCompletionMonitoring() {
-    // Слушатель изменений в transferManager
+    // Добавляем слушатель изменений в transferManager
     _transferManager.addListener(() {
       // При любом изменении в transferManager проверяем завершение передач
       _checkIfAllTransfersCompleted();
@@ -418,7 +418,7 @@ class FileTransferService extends ChangeNotifier {
           handleTransferCompleted(transferId);
         }
         break;
-      case 'file_saved':
+      case 'file_saved': // ДОБАВЛЯЕМ ОБРАБОТКУ ПОДТВЕРЖДЕНИЯ СОХРАНЕНИЯ
         _handleFileSavedFromClient(data);
         break;
     }
