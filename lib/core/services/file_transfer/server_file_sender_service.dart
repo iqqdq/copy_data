@@ -32,10 +32,11 @@ class ServerFileSenderService {
     _isClientAndroid = isClientAndroid;
     _isServerIOS = isServerIOS;
 
-    print('Информация о соединении:');
-    print('Сервер (отправитель): ${isServerIOS ? "iOS" : "Android"}');
-    print('Клиент (получатель): ${isClientAndroid ? "Android" : "iOS"}');
-    print('Требуется конвертация MOV->MP4: ${isServerIOS && isClientAndroid}');
+    print('✅ Сервер (отправитель): ${isServerIOS ? "iOS" : "Android"}');
+    print('✅ Клиент (получатель): ${isClientAndroid ? "Android" : "iOS"}');
+    print(
+      '⚠️ Требуется конвертация MOV->MP4: ${isServerIOS && isClientAndroid}',
+    );
   }
 
   Future<void> sendFilesToClient(
@@ -122,7 +123,7 @@ class ServerFileSenderService {
         final length = await file.length();
         totalPhotoSize += length;
         print(
-          '📊 Фото ${path.basename(file.path)}: ${FileUtils.formatBytes(length)}',
+          'Фото ${path.basename(file.path)}: ${FileUtils.formatBytes(length)}',
         );
       } catch (e) {
         print('⚠️ Ошибка получения размера фото: $e');
@@ -180,7 +181,7 @@ class ServerFileSenderService {
         final length = await file.length();
         totalVideoSize += length;
         print(
-          '📊 Видео ${path.basename(file.path)}: ${FileUtils.formatBytes(length)}',
+          'Видео ${path.basename(file.path)}: ${FileUtils.formatBytes(length)}',
         );
       } catch (e) {
         print('⚠️ Ошибка получения размера видео: $e');
@@ -273,7 +274,7 @@ class ServerFileSenderService {
 
           transfer.completedFiles = confirmedFiles;
           print(
-            '📊 Обновлен счетчик файлов: $confirmedFiles/${transfer.totalFiles}',
+            'Обновлен счетчик файлов: $confirmedFiles/${transfer.totalFiles}',
           );
 
           // Уведомляем UI
@@ -323,7 +324,7 @@ class ServerFileSenderService {
     final int totalGroupSize = transfer.fileSize;
 
     print(
-      '📊 Начинаю отправку группы с сервера: ${files.length} файлов, '
+      'Начинаю отправку группы с сервера: ${files.length} файлов, '
       'общий размер: ${(totalGroupSize / (1024 * 1024)).toStringAsFixed(2)} MB',
     );
 

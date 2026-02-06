@@ -147,7 +147,7 @@ class ProgressController extends ChangeNotifier {
         await appSettings.increaseTransferFiles(transfer.totalFiles);
 
         print(
-          '📊 Передано файлов: ${transfer.totalFiles} из ${transfer.fileName}',
+          '✅ Передано файлов: ${transfer.totalFiles} из ${transfer.fileName}',
         );
       }
     } catch (e) {

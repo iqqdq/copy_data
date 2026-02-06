@@ -129,7 +129,7 @@ class VideoConverterService {
 
             print('✅ Конвертация успешна!');
             print(
-              '📊 Новый размер: ${(convertedSize / 1024 / 1024).toStringAsFixed(2)} MB',
+              'Новый размер: ${(convertedSize / 1024 / 1024).toStringAsFixed(2)} MB',
             );
 
             onProgress(100.0);
