@@ -38,13 +38,13 @@ class WebSocketServerService extends ChangeNotifier {
   Future<void> startServer() async {
     try {
       _localIp = await _getLocalIp();
-      print('📱 IP адрес сервера: $_localIp');
+      print('✅ IP адрес сервера: $_localIp');
 
       bool serverStarted = false;
 
       for (var port in [PORT, 8081, 8082, 8083, 8084]) {
         try {
-          print('🔄 Пробую запустить на порту $port...');
+          print('⚠️ Пробую запустить на порту $port...');
 
           _httpServer = await HttpServer.bind(
             InternetAddress.anyIPv4,
@@ -59,8 +59,7 @@ class WebSocketServerService extends ChangeNotifier {
           serverStarted = true;
 
           _isServerRunning = true;
-          print('🎉 WEB SOCKET сервер запущен!');
-          print('Подключитесь: ws://$_localIp:$port');
+          print('✅ WEB SOCKET сервер запущен! ws://$_localIp:$port');
 
           notifyListeners();
           break;
@@ -79,9 +78,8 @@ class WebSocketServerService extends ChangeNotifier {
       if (!serverStarted) {
         throw Exception('Не удалось запустить сервер ни на одном порту');
       }
-    } catch (e, stackTrace) {
-      print('💥 ОШИБКА ЗАПУСКА СЕРВЕРА: $e');
-      print('Stack: $stackTrace');
+    } catch (e, _) {
+      print('❌ Ошибка запуска сервера: $e');
 
       _isServerRunning = false;
       notifyListeners();
@@ -91,7 +89,7 @@ class WebSocketServerService extends ChangeNotifier {
 
   void _handleWebSocket(HttpRequest request) async {
     try {
-      print('🔗 Входящее подключение: ${request.uri}');
+      print('✅ Входящее подключение: ${request.uri}');
 
       if (request.uri.path == '/ws') {
         final webSocket = await WebSocketTransformer.upgrade(request);

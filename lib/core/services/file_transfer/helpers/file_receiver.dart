@@ -37,9 +37,9 @@ class FileReceiver {
       _tempFile = File(tempPath);
       _sink = _tempFile!.openWrite(mode: FileMode.writeOnlyAppend);
 
-      print('📁 Создан временный файл для приема: $fileName');
+      print('✅ Создан временный файл для приема: $fileName');
     } catch (e) {
-      onError('Ошибка инициализации приемника: $e');
+      onError('❌ Ошибка инициализации приемника: $e');
     }
   }
 

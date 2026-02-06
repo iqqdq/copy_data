@@ -34,7 +34,7 @@ class VideoConverterService {
     });
 
     try {
-      print('🎬 Конвертация HEVC (iPhone) в H.264 (Android)...');
+      print('⚠️ Конвертация HEVC (iPhone) в H.264 (Android)...');
 
       if (!await file.exists()) {
         print('❌ Файл не найден');
@@ -43,16 +43,16 @@ class VideoConverterService {
       }
 
       final fileSize = await file.length();
-      print('📊 Размер: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
+      print('⚠️ Размер: ${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB');
 
       final duration = await _getVideoDuration(file);
       if (duration == null) {
-        print('⚠️ Не удалось получить длительность видео');
+        print('❌ Не удалось получить длительность видео');
         onProgress(100.0);
         return null;
       }
 
-      print('⏱️ Длительность видео: $duration секунд');
+      print('⚠️ Длительность видео: $duration секунд');
       onProgress(0.0);
 
       final tempDir = await getTemporaryDirectory();
@@ -61,8 +61,6 @@ class VideoConverterService {
         tempDir.path,
         'android_compatible_$timestamp.mp4',
       );
-
-      print('📁 Выходной файл: $outputPath');
 
       final conversionCommand =
           '''
@@ -82,8 +80,6 @@ class VideoConverterService {
       -y "$outputPath"
     '''
               .replaceAll(RegExp(r'\s+'), ' ');
-
-      print('🚀 Команда конвертации: $conversionCommand');
 
       final completer = Completer<File?>();
       double lastSentProgress = -1.0;
@@ -152,19 +148,18 @@ class VideoConverterService {
 
       // Ожидаем завершения или отмены
       return await completer.future.timeout(
-        Duration(minutes: 10),
+        Duration(minutes: 20),
         onTimeout: () {
           if (!_isCancelled) {
-            print('⏱️ Конвертация превысила лимит времени');
+            print('❌ Конвертация превысила лимит времени');
             onProgress(100.0);
           }
           return null;
         },
       );
-    } catch (e, stackTrace) {
+    } catch (e, _) {
       _disableFfmpegProgressListener();
-      print('💥 Ошибка при конвертации: $e');
-      print('Stack: $stackTrace');
+      print('❌ Ошибка при конвертации: $e');
       onProgress(100.0);
       return null;
     }
@@ -221,8 +216,6 @@ class VideoConverterService {
 
     _isProgressListenerActive = true;
 
-    print('🎯 Включаю слушатель прогресса FFmpeg');
-
     // Включаем callback для логов FFmpeg
     FFmpegKitConfig.enableLogCallback((log) {
       if (!_isProgressListenerActive) return;
@@ -242,7 +235,6 @@ class VideoConverterService {
   void _disableFfmpegProgressListener() {
     if (!_isProgressListenerActive) return;
 
-    print('🎯 Отключаю слушатель прогресса FFmpeg');
     _isProgressListenerActive = false;
 
     // Отключаем callback
@@ -285,18 +277,17 @@ class VideoConverterService {
 
       return null;
     } catch (e) {
-      print('⚠️ Ошибка парсинга времени FFmpeg: $e');
+      print('❌ Ошибка парсинга времени FFmpeg: $e');
       return null;
     }
   }
 
   Future<void> _tryCancelFfmpegSession(FFmpegSession session) async {
     try {
-      print('🛑 Пытаюсь отменить выполнение FFmpeg...');
       await session.cancel();
       await Future.delayed(Duration(milliseconds: 500));
     } catch (e) {
-      print('⚠️ Не удалось отменить FFmpeg сессию: $e');
+      print('❌ Не удалось отменить FFmpeg сессию: $e');
     }
   }
 

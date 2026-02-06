@@ -135,7 +135,7 @@ class SendController extends ChangeNotifier {
   }
 
   void handleClientDisconnected() {
-    print('🔌 Клиент отключился');
+    print('⚠️ Клиент отключился');
     setConnecting(false);
     setConnected(false);
   }

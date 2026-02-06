@@ -69,7 +69,7 @@ class FileTransferManager extends ChangeNotifier {
       try {
         await entry.value.close();
       } catch (e) {
-        print('⚠️ Ошибка закрытия приемника ${entry.key}: $e');
+        print('❌ Ошибка закрытия приема ${entry.key}: $e');
       }
     }
     _fileReceivers.clear();
@@ -88,11 +88,11 @@ class FileTransferManager extends ChangeNotifier {
     try {
       final transfer = _activeTransfers[transferId];
       if (transfer == null) {
-        print('⚠️ Передача не найдена: $transferId');
+        print('❌ Передача не найдена: $transferId');
         return;
       }
 
-      print('🛑 Отменяем передачу: ${transfer.fileName} ($transferId)');
+      print('⚠️ Отменяем передачу: ${transfer.fileName} ($transferId)');
 
       // Отправляем сообщение об отмене другой стороне
       if (notifyRemote) {
@@ -110,7 +110,6 @@ class FileTransferManager extends ChangeNotifier {
         } else {
           // Клиент отменяет - отправляем серверу
           await sendClientMessage(cancelMessage);
-          print('📤 Отправлена отмена серверу: $transferId');
         }
       }
 
@@ -118,7 +117,7 @@ class FileTransferManager extends ChangeNotifier {
       final receiverKeys = List<String>.from(_fileReceivers.keys);
       for (final key in receiverKeys) {
         if (key.startsWith(transferId) || key == transferId) {
-          print('🛑 Закрываем приемник файла: $key');
+          print('⚠️ Закрываем приемник файла: $key');
           try {
             await _fileReceivers[key]?.close();
           } catch (e) {
@@ -144,7 +143,7 @@ class FileTransferManager extends ChangeNotifier {
   void handleRemoteCancellation(Map<String, dynamic> data) {
     final transferId = data['transferId'] as String?;
     if (transferId != null) {
-      print('🛑 Получена отмена передачи от другой стороны: $transferId');
+      print('⚠️ Получена отмена передачи от другой стороны: $transferId');
 
       if (_onRemoteCancellationCallback != null) {
         _onRemoteCancellationCallback!(transferId);
@@ -154,7 +153,6 @@ class FileTransferManager extends ChangeNotifier {
       final receiverKeys = List<String>.from(_fileReceivers.keys);
       for (final key in receiverKeys) {
         if (key.startsWith(transferId) || key == transferId) {
-          print('🛑 Закрываем приемник файла: $key');
           _fileReceivers.remove(key);
         }
       }

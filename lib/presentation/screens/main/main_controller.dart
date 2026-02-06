@@ -161,8 +161,6 @@ class MainController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('🔐 Начинаю проверку разрешений...');
-
       List<bool> newStates = [];
 
       // 1. NSLocalNetworkUsageDescription (iOS) и WiFi разрешения для Android
@@ -174,10 +172,10 @@ class MainController extends ChangeNotifier {
 
           if (hasWifi) {
             newStates.add(true);
-            print('📡 iOS: Подключено к Wi-Fi');
+            print('iOS: Подключено к Wi-Fi');
           } else {
             newStates.add(false);
-            print('📡 iOS: Нет Wi-Fi подключения или доступ запрещен');
+            print('iOS: Нет Wi-Fi подключения или доступ запрещен');
           }
         } catch (e) {
           print('⚠️ Ошибка при проверке сети на iOS: $e');
@@ -202,12 +200,12 @@ class MainController extends ChangeNotifier {
             final hasWifiPermission = wifiStateStatus.isGranted;
             newStates.add(hasWifiPermission && hasNetworkAccess);
             print(
-              '📡 Android 12+ WiFi статус: $wifiStateStatus, Network доступ: $hasNetworkAccess',
+              'Android 12+ WiFi статус: $wifiStateStatus, Network доступ: $hasNetworkAccess',
             );
           } else {
             // Старые версии Android
             newStates.add(hasNetworkAccess);
-            print('📡 Android <12 Network доступ: $hasNetworkAccess');
+            print('Android <12 Network доступ: $hasNetworkAccess');
           }
         } catch (e) {
           print('⚠️ Не удалось проверить WiFi разрешение: $e');
@@ -219,17 +217,17 @@ class MainController extends ChangeNotifier {
       if (Platform.isAndroid) {
         final storageStatus = await Permission.storage.status;
         newStates.add(storageStatus.isGranted);
-        print('🖼 Android Storage статус: $storageStatus');
+        print('Android Storage статус: $storageStatus');
       } else if (Platform.isIOS) {
         final photosStatus = await Permission.photos.status;
         newStates.add(photosStatus.isGranted);
-        print('📱 iOS Photos статус: $photosStatus');
+        print('iOS Photos статус: $photosStatus');
       }
 
       // 3. Camera
       final cameraStatus = await Permission.camera.status;
       newStates.add(cameraStatus.isGranted);
-      print('📸 Camera статус: $cameraStatus');
+      print('Camera статус: $cameraStatus');
 
       // Проверяем, все ли разрешения получены
       final allPermissionsGranted = newStates.every((state) => state);
@@ -268,7 +266,7 @@ class MainController extends ChangeNotifier {
         final hasWifi = connectivityResult.contains(ConnectivityResult.wifi);
         return hasWifi;
       } catch (e) {
-        print('📡 iOS: Ошибка при проверке сети: $e');
+        print('❌ iOS: Ошибка при проверке сети: $e');
         return false;
       }
     } else {
@@ -294,7 +292,7 @@ class MainController extends ChangeNotifier {
           return hasNetworkAccess;
         }
       } catch (e) {
-        print('⚠️ Не удалось запросить WiFi разрешение: $e');
+        print('❌ Не удалось запросить WiFi разрешение: $e');
         return false;
       }
     }

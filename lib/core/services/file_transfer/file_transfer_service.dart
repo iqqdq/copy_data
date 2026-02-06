@@ -94,8 +94,6 @@ class FileTransferService extends ChangeNotifier {
   // MARK: - МЕТОДЫ ДЛЯ УВЕДОМЛЕНИЯ О ЗАВЕРШЕНИИ
 
   void handleAllTransfersCompleted() {
-    print('🎯 Сервис получил уведомление о завершении всех передач');
-
     // Вызываем колбэк, если он установлен
     if (_onAllTransfersCompletedCallback != null) {
       _onAllTransfersCompletedCallback!();
@@ -106,16 +104,10 @@ class FileTransferService extends ChangeNotifier {
   }
 
   void handleTransferCompleted(String transferId) {
-    print('✅ Сервис получил уведомление о завершении передачи: $transferId');
-
-    // ФИКС СЧЕТЧИКА: Если передача завершена (100%), устанавливаем счетчик точно
+    // Если передача завершена (100%), устанавливаем счетчик точно
     final transfer = _transferManager.getTransfer(transferId);
     if (transfer != null && transfer.progress >= 100.0) {
       if (transfer.completedFiles != transfer.totalFiles) {
-        print(
-          '🔄 Исправляю счетчик завершенной передачи: '
-          '${transfer.completedFiles} → ${transfer.totalFiles}',
-        );
         transfer.completedFiles = transfer.totalFiles;
       }
     }
@@ -162,7 +154,7 @@ class FileTransferService extends ChangeNotifier {
     }
 
     if (allCompleted && hasAtLeastOneSuccess) {
-      print('🎉 Все активные передачи завершены!');
+      print('✅ Все активные передачи завершены!');
       handleAllTransfersCompleted();
     }
   }
@@ -172,7 +164,7 @@ class FileTransferService extends ChangeNotifier {
     _transferManager.closeAllFileReceivers();
 
     // 2. Очищаем конвертер видео
-    // _videoConverter.dispose();
+    _videoConverter.dispose();
 
     // 3. Оповещаем UI
     notifyListeners();
@@ -186,7 +178,7 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> _initialize() async {
     _serverFileSender = ServerFileSenderService(
-      // videoConverter: _videoConverter,
+      videoConverter: _videoConverter,
       transferManager: _transferManager,
       onProgressUpdated: () {
         // Уведомляем UI
@@ -235,7 +227,7 @@ class FileTransferService extends ChangeNotifier {
       await _webSocketServer.startServer();
       notifyListeners();
     } catch (e, _) {
-      print('💥 Ошибка запуска сервера: $e');
+      print('❌ Ошибка запуска сервера: $e');
       notifyListeners();
       rethrow;
     }
@@ -243,10 +235,7 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> stopServer() async {
     try {
-      print('🛑 Остановка сервера...');
-
       // 1. Отключаем всех подключенных клиентов
-      print('🔌 Отключение подключенных клиентов...');
       final clientsToDisconnect = List<WebSocket>.from(
         _webSocketServer.connectedClients,
       );
@@ -277,7 +266,7 @@ class FileTransferService extends ChangeNotifier {
       await _webSocketServer.stopServer();
 
       notifyListeners();
-      print('✅ Сервер остановлен, все клиенты отключены, передачи очищены');
+      print('✅ Сервер остановлен');
     } catch (e) {
       print('❌ Ошибка остановки сервера: $e');
     }
@@ -338,7 +327,7 @@ class FileTransferService extends ChangeNotifier {
       );
       notifyListeners();
     } catch (e) {
-      print('💥 ОШИБКА ПОДКЛЮЧЕНИЯ: $e');
+      print('❌ Ошибка подключения: $e');
       notifyListeners();
       rethrow;
     }
@@ -350,17 +339,13 @@ class FileTransferService extends ChangeNotifier {
   }
 
   Future<void> clearClientTransfers() async {
-    print('🧹 Очищаю клиентские передачи...');
-
-    if (_webSocketClient.isConnected) {
-      await disconnect();
-    }
+    // Очищаем завершенные передачи
+    if (_webSocketClient.isConnected) await disconnect();
 
     await _transferManager.closeAllFileReceivers();
     _transferManager.clearAllTransfers();
 
     notifyListeners();
-    print('✅ Клиентские передачи очищены');
   }
 
   // MARK: - УПРАВЛЕНИЕ ПЕРЕДАЧАМИ
@@ -393,9 +378,6 @@ class FileTransferService extends ChangeNotifier {
         break;
       case 'metadata_ack':
         print('✅ Клиент готов принимать файл');
-        break;
-      case 'chunk_ack':
-        _handleChunkAckFromClient(data);
         break;
       case 'file_received':
         _handleFileReceivedFromClient(data);
@@ -437,7 +419,7 @@ class FileTransferService extends ChangeNotifier {
     WebSocket socket,
     Map<String, dynamic> data,
   ) async {
-    print('🤝 Handshake от клиента: ${data['clientInfo']}');
+    print('✅ Handshake от клиента: ${data['clientInfo']}');
 
     if (!isSubscribed.value) {
       print('⚠️ У сервера нет подписки, отправляю уведомление клиенту');
@@ -450,6 +432,17 @@ class FileTransferService extends ChangeNotifier {
       notifyListeners();
       return;
     }
+
+    // Определяем платформу клиента
+    final clientInfo = data['clientInfo'] as Map<String, dynamic>?;
+    final clientPlatform = clientInfo?['platform'] as String?;
+    final isClientAndroid = clientPlatform?.toLowerCase() == 'android';
+
+    // Определяем платформу сервера
+    final isServerIOS = Platform.isIOS;
+
+    // Передаем информацию о платформах в ServerFileSenderService
+    _serverFileSender.setClientInfo(socket, isClientAndroid, isServerIOS);
 
     await _webSocketServer.sendToClient(socket, {
       'type': 'handshake_ack',
@@ -497,23 +490,12 @@ class FileTransferService extends ChangeNotifier {
     }
   }
 
-  void _handleChunkAckFromClient(Map<String, dynamic> data) {
-    final transferId = data['transferId'] as String?;
-    final receivedBytes = data['receivedBytes'] as int?;
-
-    if (transferId != null && receivedBytes != null) {
-      print(
-        '✅ Подтверждение чанка от клиента: $transferId - ${FileUtils.formatBytes(receivedBytes)}',
-      );
-    }
-  }
-
   void _handleFileReceivedFromClient(Map<String, dynamic> data) {
     final transferId = data['transferId'] as String?;
     final fileName = data['fileName'] as String?;
 
     if (transferId != null && fileName != null) {
-      print('🎉 Клиент подтвердил получение файла: $fileName');
+      print('✅ Клиент подтвердил получение файла: $fileName');
 
       // Можно отправить подтверждение о завершении передачи
       try {
@@ -603,7 +585,7 @@ class FileTransferService extends ChangeNotifier {
 
   Future<void> openMediaInGallery(ReceivedMedia media) async {
     try {
-      print('📱 Открытие медиа: ${media.file.path}');
+      print(' Открытие медиа: ${media.file.path}');
       notifyListeners();
     } catch (e) {
       print('❌ Ошибка открытия медиа: $e');

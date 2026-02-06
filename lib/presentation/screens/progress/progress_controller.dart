@@ -127,7 +127,7 @@ class ProgressController extends ChangeNotifier {
   void _handleAllTransfersCompleted() {
     if (_hasShownCompletionDialog) return;
 
-    print('🎉 Все передачи успешно завершены!');
+    print('✅ Все передачи успешно завершены!');
     _hasShownCompletionDialog = true;
 
     // Показываем диалог оценки

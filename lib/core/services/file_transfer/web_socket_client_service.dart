@@ -44,7 +44,7 @@ class WebSocketClientService extends ChangeNotifier {
     required Map<String, dynamic> handshakeData,
   }) async {
     try {
-      print('📱 ПОДКЛЮЧЕНИЕ К СЕРВЕРУ: $serverIp:$port');
+      print('⚠️ Подключение к серверу: $serverIp:$port');
 
       await disconnect();
 
@@ -77,15 +77,14 @@ class WebSocketClientService extends ChangeNotifier {
 
       await Future.delayed(Duration(seconds: 1));
 
-      print('🎉 УСПЕШНО ПОДКЛЮЧЕНО!');
+      print('✅ Успешно подключено!');
       notifyListeners();
     } catch (e) {
-      print('💥 ОШИБКА ПОДКЛЮЧЕНИЯ: $e');
+      print('❌ Ошибка подключения: $e');
       _handleConnectionError(e.toString());
 
       // Пробуем альтернативный порт
       if (port == PORT) {
-        print('🔄 Пробую порт 8081...');
         await Future.delayed(Duration(seconds: 1));
         try {
           await connectToServer(

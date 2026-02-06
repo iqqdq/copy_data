@@ -13,9 +13,7 @@ class GallerySaverService {
     required String originalName,
   }) async {
     try {
-      print('💾 Сохранение в галерею: ${file.path}');
-
-      // Проверяем существование файла
+      // Проверяем существует ли файл
       if (!await file.exists()) {
         print('❌ Файл не существует: ${file.path}');
         return GallerySaveResult(
@@ -47,7 +45,6 @@ class GallerySaverService {
         savedPath = result.savedPath;
         errorMessage = result.errorMessage;
       } else if (mimeType.startsWith('video/')) {
-        // Для видео на iOS используем специальный метод
         final result = await _saveVideoToGallery(
           file,
           uniqueFileName,
@@ -66,9 +63,8 @@ class GallerySaverService {
         originalName: originalName,
         savedName: uniqueFileName,
       );
-    } catch (e, stackTrace) {
-      print('❌ Критическая ошибка сохранения в галерею: $e');
-      print('Stack: $stackTrace');
+    } catch (e, _) {
+      print('❌ Ошибка сохранения в галерею: $e');
 
       return GallerySaveResult(
         isSaved: false,
@@ -211,11 +207,9 @@ class GallerySaverService {
     String originalExtension,
   ) async {
     try {
-      print('🎥 Сохранение видео на iOS: $uniqueFileName');
+      print('⚠️ Сохранение видео на iOS: $uniqueFileName');
 
-      // Для iOS видео НЕ используем параметр name, так как библиотека его игнорирует
-      // Вместо этого копируем файл во временную директорию с правильным именем
-
+      // Для iOS видео копируем файл во временную директорию с правильным именем
       // Получаем временную директорию
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/$uniqueFileName');
@@ -224,11 +218,8 @@ class GallerySaverService {
       await file.copy(tempFile.path);
 
       // Теперь сохраняем через системный диалог
-      // На iOS параметр name часто игнорируется для видео
       final result = await ImageGallerySaverPlus.saveFile(
         tempFile.path,
-        // Параметр name может игнорироваться для видео на iOS
-        // но мы все равно передаем его
         name: uniqueFileName,
         isReturnPathOfIOS: true,
       );
@@ -329,7 +320,7 @@ class GallerySaverService {
         originalName: uniqueFileName,
       );
     } catch (e, stackTrace) {
-      print('❌ Критическая ошибка сохранения изображения на iOS: $e');
+      print('❌ Ошибка сохранения изображения на iOS: $e');
       print('Stack: $stackTrace');
       return GallerySaveResult(
         isSaved: false,
@@ -364,7 +355,7 @@ class GallerySaverService {
         originalName: uniqueFileName,
       );
     } catch (e, _) {
-      print('❌ Критическая ошибка сохранения изображения на Android: $e');
+      print('❌ Ошибка сохранения изображения на Android: $e');
       return GallerySaveResult(
         isSaved: false,
         errorMessage: e.toString(),

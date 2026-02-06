@@ -23,7 +23,7 @@ class PurchaseService {
   static PurchaseService get instance => _instance;
 
   Future init() async {
-    if (Platform.isAndroid) {
+    if (!Platform.isIOS) {
       isSubscribed.value = true;
       return;
     }

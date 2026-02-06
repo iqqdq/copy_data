@@ -53,8 +53,8 @@ class FileTransfer with ChangeNotifier {
 
       // Вызываем с небольшой задержкой, чтобы избежать повторных вызовов
       Future.delayed(Duration(milliseconds: 100), () {
-        if (!_hasCompleted) return; // Дополнительная проверка
-        print('🎯 Вызов onComplete для передачи: $transferId');
+        if (!_hasCompleted) return;
+        print('⚠️ Вызов onComplete для передачи: $transferId');
         onComplete(file);
       });
     }

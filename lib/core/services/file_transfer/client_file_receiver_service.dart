@@ -31,8 +31,6 @@ class ClientFileReceiverService {
       final fileType = data['fileType'] as String?;
 
       if (transferId != null && totalFiles != null && totalSize != null) {
-        print('📦 Получены метаданные группы: $fileName ($totalFiles файлов)');
-
         // Сбрасываем индекс для новой группы
         _currentFileIndices[transferId] = 0;
         _receivedFiles[transferId] = [];
@@ -54,7 +52,7 @@ class ClientFileReceiverService {
             print('✅ Группа завершена: $transferId');
             // Ждем завершения всех файлов
             await _groupCompleters[transferId]?.future;
-            print('🎉 Все файлы в группе $transferId обработаны');
+            print('✅ Все файлы в группе $transferId обработаны');
           },
           onError: (error) {
             print('❌ Ошибка в группе: $error');
@@ -144,9 +142,6 @@ class ClientFileReceiverService {
         final fileReceiver = _transferManager.getFileReceiver(transferId);
         if (fileReceiver != null) {
           fileReceiver.receiveChunk(chunkData, isLast);
-
-          // Отправляем подтверждение получения чанка
-          _sendChunkAck(transferId, fileReceiver.receivedBytes);
         }
       }
     } catch (e) {
@@ -162,10 +157,6 @@ class ClientFileReceiverService {
     int fileIndex,
   ) async {
     try {
-      print('💾 Начинаю сохранение файла: $fileName в галерею');
-      print('📊 Размер файла: ${await file.length()} байт');
-      print('📝 Тип файла: $fileType');
-
       // Сохраняем файл в галерею с уникальным именем
       final saveResult = await _gallerySaver.saveToGallery(
         file: file,
@@ -182,10 +173,10 @@ class ClientFileReceiverService {
         );
 
         if (saveResult.savedPath != null) {
-          print('📁 Путь сохранения: ${saveResult.savedPath}');
+          print('\nПуть сохранения: ${saveResult.savedPath}');
         }
 
-        // ОБНОВЛЯЕМ СЧЕТЧИК НА КЛИЕНТЕ
+        // Обновляем счетчик файлов на клиенте
         final transfer = _transferManager.getTransfer(groupTransferId);
         if (transfer != null) {
           // Увеличиваем счетчик сохраненных файлов
@@ -194,10 +185,6 @@ class ClientFileReceiverService {
 
           // Обновляем счетчик в transfer
           transfer.completedFiles = _savedFilesCount[groupTransferId]!;
-
-          print(
-            '📊 Обновлен счетчик файлов: ${transfer.completedFiles}/${transfer.totalFiles}',
-          );
         }
 
         // Отправляем подтверждение на сервер с обоими именами
@@ -215,7 +202,7 @@ class ClientFileReceiverService {
       } else {
         print('❌ Не удалось сохранить файл в галерею: $fileName');
         if (saveResult.errorMessage != null) {
-          print('⚠️ Причина: ${saveResult.errorMessage}');
+          print('\nПричина: ${saveResult.errorMessage}');
         }
 
         await sendClientMessage({
@@ -250,15 +237,14 @@ class ClientFileReceiverService {
       final savedFiles = _savedFilesCount[groupTransferId] ?? 0;
 
       if (savedFiles >= totalFiles) {
-        print('🎉 Все $totalFiles файлов в группе $groupTransferId обработаны');
+        print('✅ Все $totalFiles файлов в группе $groupTransferId обработаны');
         _groupCompleters[groupTransferId]?.complete();
 
         // Очищаем временные данные группы
         _cleanupGroupData(groupTransferId);
       }
-    } catch (e, stackTrace) {
-      print('❌ Критическая ошибка при сохранении файла в галерею: $e');
-      print('Stack trace: $stackTrace');
+    } catch (e, _) {
+      print('❌ Ошибка при сохранении файла в галерею: $e');
 
       await sendClientMessage({
         'type': 'file_saved',
@@ -273,28 +259,13 @@ class ClientFileReceiverService {
   }
 
   void _cleanupGroupData(String groupTransferId) {
-    // Через 5 секунд очищаем данные группы
+    // Очищаем данные группы
     Future.delayed(Duration(seconds: 5), () {
       _currentFileIndices.remove(groupTransferId);
       _receivedFiles.remove(groupTransferId);
       _savedFilesCount.remove(groupTransferId);
       _groupCompleters.remove(groupTransferId);
-
-      print('🧹 Очищены временные данные группы: $groupTransferId');
     });
-  }
-
-  Future<void> _sendChunkAck(String transferId, int receivedBytes) async {
-    try {
-      await sendClientMessage({
-        'type': 'chunk_ack',
-        'transferId': transferId,
-        'receivedBytes': receivedBytes,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      print('❌ Ошибка отправки подтверждения чанка: $e');
-    }
   }
 
   void handleProgressUpdate(Map<String, dynamic> data) {
