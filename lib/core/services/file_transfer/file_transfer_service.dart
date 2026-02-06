@@ -12,7 +12,7 @@ class FileTransferService extends ChangeNotifier {
   // Зависимости
   final WebSocketServerService _webSocketServer = WebSocketServerService();
   final WebSocketClientService _webSocketClient = WebSocketClientService();
-  // final VideoConverterService _videoConverter = VideoConverterService();
+  final VideoConverterService _videoConverter = VideoConverterService();
   final GallerySaverService _gallerySaver = GallerySaverService();
   final FileTransferManager _transferManager = FileTransferManager();
 
@@ -643,7 +643,7 @@ class FileTransferService extends ChangeNotifier {
     removeAllCallbacks();
     _transferManager.dispose();
     _webSocketServer.dispose();
-    // _videoConverter.dispose(); // TODO: DELETE?
+    _videoConverter.dispose();
 
     stopServer();
     disconnect();

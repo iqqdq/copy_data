@@ -7,9 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core.dart';
 
-final ValueNotifier<bool> isSubscribed = ValueNotifier(
-  Platform.isAndroid ? true : false,
-);
+final ValueNotifier<bool> isSubscribed = ValueNotifier(false);
 
 late PriceProductService weekProduct;
 late PriceProductService weekTrialProduct;
@@ -25,6 +23,11 @@ class PurchaseService {
   static PurchaseService get instance => _instance;
 
   Future init() async {
+    if (Platform.isAndroid) {
+      isSubscribed.value = true;
+      return;
+    }
+
     await AezakmiPriceService().initialize(
       apphudKey: AppConstants.apphudId,
       apphudPaywallsFallbackPath: "ios/apphud_paywalls_fallback.json",
@@ -39,8 +42,7 @@ class PurchaseService {
     );
 
     isSubscribed.value =
-        (await Apphud.hasActiveSubscription() ||
-        await Apphud.hasPremiumAccess());
+        await Apphud.hasActiveSubscription() || await Apphud.hasPremiumAccess();
   }
 
   Future purchase({required PriceProductService priceProductService}) async {

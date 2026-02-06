@@ -163,16 +163,27 @@ class ClientFileReceiverService {
   ) async {
     try {
       print('💾 Начинаю сохранение файла: $fileName в галерею');
+      print('📊 Размер файла: ${await file.length()} байт');
+      print('📝 Тип файла: $fileType');
 
-      // Сохраняем файл в галерею
+      // Сохраняем файл в галерею с уникальным именем
       final saveResult = await _gallerySaver.saveToGallery(
         file: file,
         mimeType: fileType,
         originalName: fileName,
       );
 
+      // Используем savedName из результата для логов
+      final savedFileName = saveResult.savedName ?? fileName;
+
       if (saveResult.isSaved) {
-        print('✅ Файл сохранен в галерею: $fileName');
+        print(
+          '✅ Файл сохранен в галерею: $savedFileName (оригинальное: $fileName)',
+        );
+
+        if (saveResult.savedPath != null) {
+          print('📁 Путь сохранения: ${saveResult.savedPath}');
+        }
 
         // ОБНОВЛЯЕМ СЧЕТЧИК НА КЛИЕНТЕ
         final transfer = _transferManager.getTransfer(groupTransferId);
@@ -189,24 +200,31 @@ class ClientFileReceiverService {
           );
         }
 
-        // Отправляем подтверждение на сервер
+        // Отправляем подтверждение на сервер с обоими именами
         await sendClientMessage({
           'type': 'file_saved',
           'transferId': groupTransferId,
           'fileIndex': fileIndex,
-          'fileName': fileName,
+          'originalName': fileName,
+          'savedName': savedFileName,
+          'savedPath': saveResult.savedPath,
+          'fileSize': saveResult.fileSize,
           'success': true,
           'timestamp': DateTime.now().toIso8601String(),
         });
       } else {
         print('❌ Не удалось сохранить файл в галерею: $fileName');
+        if (saveResult.errorMessage != null) {
+          print('⚠️ Причина: ${saveResult.errorMessage}');
+        }
+
         await sendClientMessage({
           'type': 'file_saved',
           'transferId': groupTransferId,
           'fileIndex': fileIndex,
-          'fileName': fileName,
+          'originalName': fileName,
           'success': false,
-          'error': saveResult.errorMessage,
+          'error': saveResult.errorMessage ?? 'Unknown error',
           'timestamp': DateTime.now().toIso8601String(),
         });
       }
@@ -222,6 +240,7 @@ class ClientFileReceiverService {
         'type': 'file_received',
         'transferId': groupTransferId,
         'fileName': fileName,
+        'savedFileName': savedFileName,
         'timestamp': DateTime.now().toIso8601String(),
       });
 
@@ -233,19 +252,36 @@ class ClientFileReceiverService {
       if (savedFiles >= totalFiles) {
         print('🎉 Все $totalFiles файлов в группе $groupTransferId обработаны');
         _groupCompleters[groupTransferId]?.complete();
+
+        // Очищаем временные данные группы
+        _cleanupGroupData(groupTransferId);
       }
-    } catch (e) {
-      print('❌ Ошибка при сохранении файла в галерею: $e');
+    } catch (e, stackTrace) {
+      print('❌ Критическая ошибка при сохранении файла в галерею: $e');
+      print('Stack trace: $stackTrace');
+
       await sendClientMessage({
         'type': 'file_saved',
         'transferId': groupTransferId,
         'fileIndex': fileIndex,
-        'fileName': fileName,
+        'originalName': fileName,
         'success': false,
-        'error': e.toString(),
+        'error': 'Critical error: ${e.toString()}',
         'timestamp': DateTime.now().toIso8601String(),
       });
     }
+  }
+
+  void _cleanupGroupData(String groupTransferId) {
+    // Через 5 секунд очищаем данные группы
+    Future.delayed(Duration(seconds: 5), () {
+      _currentFileIndices.remove(groupTransferId);
+      _receivedFiles.remove(groupTransferId);
+      _savedFilesCount.remove(groupTransferId);
+      _groupCompleters.remove(groupTransferId);
+
+      print('🧹 Очищены временные данные группы: $groupTransferId');
+    });
   }
 
   Future<void> _sendChunkAck(String transferId, int receivedBytes) async {
